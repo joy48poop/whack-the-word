@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Whack-the-Word!</title>
+<style>
+  /* ============================================================
+     WHACK-THE-WORD!  — Fry First 100 sight-word matching game
+     Roblox-style blocky look. Self-contained single file.
+     ============================================================ */
+
+  :root{
+    --stud: #e8b23a;        /* roblox yellow */
+    --stud-dark:#c8902a;
+    --grass:#7ec850;
+    --grass-dark:#5aa838;
+    --dirt:#7a4a25;
+    --dirt-dark:#5c3518;
+    --sign:#b9824a;
+    --sign-dark:#8a5d31;
+    --sky1:#5ec8f0;
+    --sky2:#9be1ff;
+    --ink:#2b2b3a;
+    --gold:#ffd23f;
+    --good:#3ec96b;
+    --bad:#ff5d5d;
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ height:100%; margin:0; }
+  body{
+    /* dyslexia-friendly geometric sans (single-story a/g). Century Gothic where
+       installed, else the closest system fallbacks (Futura on Mac, etc.) */
+    font-family: "Century Gothic", CenturyGothic, "Futura", "Avant Garde",
+                 "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(120% 80% at 50% 0%, var(--sky2) 0%, var(--sky1) 55%, #46b0e0 100%);
+    overflow:hidden;
+    -webkit-user-select:none; user-select:none;
+    touch-action:manipulation;
+  }
+
+  /* floating blocky clouds */
+  .cloud{ position:fixed; background:#fff; border-radius:14px;
+    box-shadow: 28px 0 #fff, 56px 0 #fff, 14px -16px #fff, 40px -16px #fff;
+    opacity:.85; pointer-events:none; }
+
+  /* ---------- screens ---------- */
+  .screen{ position:fixed; inset:0; display:none; flex-direction:column;
+    align-items:center; }
+  .screen.active{ display:flex; }
+
+  /* ---------- TITLE ---------- */
+  /* center the stack when it fits, but allow scrolling when the screen is short
+     (the auto margins collapse to 0 once content overflows, so nothing is clipped) */
+  #title{ justify-content:flex-start; gap:12px; padding:16px; overflow-y:auto; }
+  #title > *:first-child{ margin-top:auto; }
+  #title > *:last-child{ margin-bottom:auto; }
+  .logo{ text-align:center; line-height:.95; }
+  .logo .l1{ font-size:clamp(30px,7vw,68px); font-weight:900; letter-spacing:1px;
+    color:#fff; text-shadow:0 6px 0 #2f6fb0, 0 10px 18px rgba(0,0,0,.25);
+    transform:rotate(-2deg); }
+  .logo .l2{ display:inline-block; margin-top:6px; font-size:clamp(17px,3.6vw,32px);
+    font-weight:900; color:#fff; background:#ff7a3d; padding:6px 18px;
+    border-radius:14px; box-shadow:0 6px 0 #c95421; transform:rotate(1.5deg); }
+  .subtitle{ color:#0b3a5a; font-weight:700; font-size:clamp(14px,2.4vw,20px);
+    background:rgba(255,255,255,.6); padding:6px 16px; border-radius:999px; }
+
+  .btn{ font-family:inherit; cursor:pointer; border:none; font-weight:900;
+    color:#fff; border-radius:16px; padding:16px 30px; font-size:clamp(18px,3vw,26px);
+    background:linear-gradient(#3ec96b,#2aa755); box-shadow:0 7px 0 #1c8442;
+    transition:transform .06s, box-shadow .06s; }
+  .btn:active{ transform:translateY(4px); box-shadow:0 3px 0 #1c8442; }
+  .btn.secondary{ background:linear-gradient(#7aa8ff,#5a87ec); box-shadow:0 7px 0 #3f63c0; }
+  .btn.small{ padding:10px 18px; font-size:16px; border-radius:12px; }
+
+  .setlabel{ font-weight:900; color:#0b3a5a; font-size:14px; letter-spacing:.5px;
+    background:rgba(255,255,255,.55); padding:3px 14px; border-radius:999px; }
+  .levels{ display:flex; gap:12px; flex-wrap:wrap; justify-content:center; }
+  .lvl{ cursor:pointer; border:none; font-family:inherit; font-weight:900;
+    color:#0b3a5a; background:#fff; border-radius:14px; padding:12px 18px;
+    font-size:16px; box-shadow:0 5px 0 #cbd6e2; transition:transform .06s; }
+  .lvl.sel{ background:var(--gold); box-shadow:0 5px 0 #d6a800; transform:translateY(-2px); }
+  .lvl small{ display:block; font-weight:700; opacity:.7; font-size:12px; }
+
+  .howto{ max-width:540px; text-align:center; color:#0b3a5a; font-weight:600;
+    background:rgba(255,255,255,.65); border-radius:16px; padding:14px 18px;
+    font-size:clamp(13px,2.2vw,16px); line-height:1.5; }
+  kbd{ background:#fff; border:2px solid #b9c6d4; border-bottom-width:4px;
+    border-radius:7px; padding:1px 8px; font-weight:900; font-family:inherit; }
+
+  /* ---------- GAME ---------- */
+  #game{ padding:10px; }
+  .hud{ width:100%; max-width:980px; display:flex; align-items:center;
+    justify-content:space-between; gap:10px; padding:6px 6px 0; }
+  .chip{ background:rgba(255,255,255,.9); border-radius:999px; font-weight:900;
+    color:#0b3a5a; padding:8px 16px; font-size:clamp(14px,2.4vw,20px);
+    box-shadow:0 4px 0 rgba(0,0,0,.08); }
+  .chip .big{ color:#e0571e; }
+  .hud-right{ display:flex; gap:8px; align-items:center; }
+  .icon-btn{ cursor:pointer; border:none; background:rgba(255,255,255,.9);
+    width:44px; height:44px; border-radius:12px; font-size:20px;
+    box-shadow:0 4px 0 rgba(0,0,0,.08); }
+
+  .prompt{ margin:8px 0 2px; font-weight:900; color:#0b3a5a;
+    font-size:clamp(16px,3vw,26px); text-align:center; min-height:1.4em;
+    text-shadow:0 2px 0 rgba(255,255,255,.5); }
+
+  .stage{ position:relative; flex:1; width:100%; max-width:980px;
+    display:flex; align-items:center; justify-content:center; }
+
+  .board{ display:grid; gap:clamp(10px,2.5vw,26px); justify-content:center;
+    align-content:center; padding:8px; }
+
+  /* a mole hole + pop-up word sign */
+  .hole{ position:relative; width:clamp(96px,22vw,170px); aspect-ratio:1/.92;
+    cursor:pointer; }
+  /* grassy mound with dark hole */
+  .mound{ position:absolute; left:6%; right:6%; bottom:0; height:42%;
+    background:radial-gradient(120% 160% at 50% 0%, var(--grass) 0 60%, var(--grass-dark) 100%);
+    border-radius:50%/70% 70% 100% 100%;
+    box-shadow:inset 0 -8px 0 rgba(0,0,0,.12); }
+  .pit{ position:absolute; left:22%; right:22%; bottom:10%; height:24%;
+    background:radial-gradient(60% 100% at 50% 30%, #1b1208 0 60%, #2e1d10 100%);
+    border-radius:50%; }
+
+  /* the wooden sign that pops up with a word on it */
+  .sign{ position:absolute; left:50%; bottom:14%; transform:translate(-50%, 120%);
+    width:88%; display:flex; flex-direction:column; align-items:center;
+    transition:transform .35s cubic-bezier(.34,1.56,.64,1); }
+  .hole.up .sign{ transform:translate(-50%, 0%); }
+  .post{ width:14%; height:26px; background:linear-gradient(#a9763f,#7c5125);
+    border-radius:3px; margin-bottom:-4px; }
+  .plank{ width:100%; padding:10px 6px; border-radius:12px;
+    background:linear-gradient(var(--sign) , var(--sign-dark));
+    border:4px solid #6e481f;
+    box-shadow:0 6px 0 #5c3a18, inset 0 3px 0 rgba(255,255,255,.18);
+    display:flex; align-items:center; justify-content:center; }
+  .word{ font-weight:900; color:#fff5e6; letter-spacing:.5px;
+    font-size:clamp(20px,4.4vw,40px);
+    text-shadow:0 2px 0 rgba(0,0,0,.35); }
+
+  /* selection + keyboard focus states */
+  .hole.focus .plank{ outline:5px solid #fff; outline-offset:3px; }
+  .hole.sel .plank{ background:linear-gradient(#ffe07a,#f0b400);
+    border-color:#b97f00; box-shadow:0 6px 0 #a06d00, 0 0 0 5px var(--gold); }
+  .hole.sel .word{ color:#5a3d00; text-shadow:0 1px 0 rgba(255,255,255,.4); }
+
+  .hole.good .plank{ animation:whack .5s; background:linear-gradient(#7af09a,#2fbf60);
+    border-color:#1c8442; }
+  .hole.bad .plank{ animation:nope .4s; }
+  @keyframes whack{ 0%{transform:scale(1)} 30%{transform:scale(.78,1.12)}
+    60%{transform:scale(1.06,.94)} 100%{transform:scale(1)} }
+  @keyframes nope{ 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)}
+    75%{transform:translateX(8px)} }
+
+  /* ---------- Roblox character + mallet ---------- */
+  .buddy{ position:absolute; bottom:-6px; right:-4px; width:clamp(90px,16vw,150px);
+    pointer-events:none; transform-origin:bottom center; }
+  .buddy.cheer{ animation:cheer .6s; }
+  @keyframes cheer{ 0%,100%{transform:translateY(0)} 30%{transform:translateY(-22px) rotate(-4deg)}
+    60%{transform:translateY(0) rotate(3deg)} }
+  .mallet{ transform-origin:80% 90%; transition:transform .12s; }
+  .buddy.swing .mallet{ animation:swing .5s; }
+  @keyframes swing{ 0%{transform:rotate(0)} 35%{transform:rotate(-72deg)}
+    70%{transform:rotate(12deg)} 100%{transform:rotate(0)} }
+
+  /* ---------- confetti ---------- */
+  .confetti{ position:fixed; top:-12px; width:12px; height:18px; z-index:50;
+    pointer-events:none; border-radius:2px; }
+  @keyframes fall{ to{ transform:translateY(110vh) rotate(720deg); opacity:0; } }
+
+  /* big banner */
+  .banner{ position:fixed; inset:0; display:none; align-items:center;
+    justify-content:center; flex-direction:column; gap:10px; z-index:60;
+    pointer-events:none; }
+  .banner.show{ display:flex; }
+  .banner .pop{ font-size:clamp(40px,11vw,110px); font-weight:900; color:#fff;
+    text-shadow:0 6px 0 #d68800, 0 12px 22px rgba(0,0,0,.3);
+    animation:popin .5s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes popin{ from{ transform:scale(0) rotate(-12deg); opacity:0 }
+    to{ transform:scale(1); opacity:1 } }
+
+  /* ---------- MINI-GAME ---------- */
+  #mini{ padding:0; }
+  .mini-hud{ width:100%; display:flex; align-items:center; justify-content:space-between;
+    gap:10px; padding:10px 14px; }
+  .mini-title{ font-weight:900; color:#fff; font-size:clamp(16px,3vw,26px);
+    text-shadow:0 3px 0 #c95421, 0 6px 10px rgba(0,0,0,.25); text-align:center; }
+  .mini-stage{ position:relative; flex:1; width:100%; overflow:hidden;
+    background:linear-gradient(#7ed0f5 0%, #aee6ff 70%, #cdeeff 100%); }
+  /* the scrolling world (camera pans this left/right) */
+  .mini-world{ position:absolute; left:0; top:0; height:100%; width:100%;
+    will-change:transform; }
+  .ground{ position:absolute; left:0; bottom:0; width:100%; height:64px;
+    background:
+      linear-gradient(#7ec850 0 14px, #5aa838 14px 18px, #7a4a25 18px 100%);
+    box-shadow:inset 0 4px 0 rgba(255,255,255,.25); }
+
+  /* golden ? block, Roblox-stud style */
+  .qblock{ position:absolute; width:56px; height:56px; border-radius:10px;
+    background:linear-gradient(#ffd860,#e8a81f);
+    border:4px solid #b9760a;
+    box-shadow:inset 0 4px 0 rgba(255,255,255,.4), 0 5px 0 #9c6207;
+    display:flex; align-items:center; justify-content:center;
+    color:#7a4a05; font-weight:900; font-size:30px; text-shadow:0 1px 0 #fff6cf; }
+  .qblock::before, .qblock::after{ content:""; position:absolute; width:7px; height:7px;
+    border-radius:2px; background:rgba(255,255,255,.55); top:6px; }
+  .qblock::before{ left:6px; } .qblock::after{ right:6px; }
+  .qblock.bump{ animation:bump .22s; }
+  .qblock.used{ background:linear-gradient(#c8a86a,#9c7d44); border-color:#6f5526;
+    box-shadow:inset 0 4px 0 rgba(255,255,255,.2), 0 5px 0 #5c4520; color:#5c4520; }
+  @keyframes bump{ 0%{transform:translateY(0)} 40%{transform:translateY(-14px)} 100%{transform:translateY(0)} }
+
+  .mcoin{ position:absolute; width:30px; height:30px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #fff7cf, #ffd23f 55%, #e0a800 100%);
+    border:3px solid #c98e00; box-shadow:0 0 8px #ffe98a;
+    display:flex; align-items:center; justify-content:center;
+    color:#9c6f00; font-weight:900; font-size:15px; pointer-events:none; }
+  .mcoin.fly{ animation:coinfly .65s ease-out forwards; }
+  @keyframes coinfly{ to{ transform:translateY(-90px) scale(.4); opacity:0; } }
+
+  .player{ position:absolute; width:64px; pointer-events:none; will-change:top,left; }
+  .player.hit{ animation:hitflash .25s steps(2) infinite; }
+  @keyframes hitflash{ 0%{ opacity:1; filter:none; } 50%{ opacity:.35; filter:drop-shadow(0 0 6px #ff5d5d);} }
+
+  /* high blocks that can only be reached by an arrow — gently glowing */
+  .qblock.high{ background:linear-gradient(#b6e3ff,#67b6f0); border-color:#2f86c8;
+    box-shadow:inset 0 4px 0 rgba(255,255,255,.5), 0 5px 0 #1f6aa0, 0 0 16px #9fe0ff;
+    color:#0b466e; animation:hifloat 1.6s ease-in-out infinite; }
+  @keyframes hifloat{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-6px) } }
+
+  /* crawling bugs (touch them and you lose coins) */
+  /* crawling creatures — rendered as emoji (ant / cockroach / rat) */
+  .bug{ position:absolute; line-height:1; text-align:center; will-change:left;
+    filter:drop-shadow(0 3px 2px rgba(0,0,0,.25)); }
+
+  /* weapons the player fires */
+  .bullet{ position:absolute; width:18px; height:7px; border-radius:4px;
+    background:linear-gradient(#fff3a0,#e0a800); box-shadow:0 0 6px #ffd23f; }
+  .bomb{ position:absolute; font-size:30px; line-height:1; animation:spin .5s linear infinite; }
+  /* long-range "power" shot from a double-tap of fire */
+  .powershot{ filter:drop-shadow(0 0 9px #ffe066) brightness(1.12); }
+  .bullet.powershot, .arrow.powershot{ box-shadow:0 0 10px #ffd23f; }
+  @keyframes spin{ to{ transform:rotate(360deg) } }
+  .spraycloud{ position:absolute; border-radius:45% 60% 55% 45%; transform-origin:left center;
+    pointer-events:none;
+    background:radial-gradient(circle at 25% 50%, rgba(120,230,160,.85), rgba(120,230,160,0) 72%); }
+  .boom{ position:absolute; line-height:1; display:flex; align-items:center; justify-content:center;
+    pointer-events:none; animation:boompop .38s ease-out forwards; }
+  @keyframes boompop{ 0%{ transform:scale(.3); opacity:1 } 100%{ transform:scale(1.15); opacity:0 } }
+
+  /* arrows the player shoots (press P) */
+  .arrow{ position:absolute; width:36px; height:8px; transform-origin:center;
+    background:linear-gradient(#c79a5f,#7c5125); border-radius:3px; will-change:left,top; }
+  .arrow::after{ content:""; position:absolute; right:-9px; top:-4px;
+    border:8px solid transparent; border-left-color:#5c3a18; }
+  .arrow::before{ content:""; position:absolute; left:-2px; top:-3px; width:8px; height:14px;
+    background:#e9d8b0; clip-path:polygon(100% 0, 0 50%, 100% 100%); }
+
+  .controls{ width:100%; display:flex; gap:10px; padding:10px 14px 16px;
+    justify-content:center; }
+  .ctrl{ flex:1; max-width:150px; font-family:inherit; font-weight:900; color:#fff;
+    border:none; border-radius:16px; padding:18px 10px; font-size:22px; cursor:pointer;
+    background:linear-gradient(#7aa8ff,#5a87ec); box-shadow:0 6px 0 #3f63c0;
+    touch-action:none; }
+  .ctrl.jump{ background:linear-gradient(#ffce4d,#f0a91f); box-shadow:0 6px 0 #c47f0c; flex:1.4; }
+  .ctrl:active{ transform:translateY(3px); box-shadow:0 3px 0 #3f63c0; }
+  .ctrl.jump:active{ box-shadow:0 3px 0 #c47f0c; }
+
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body>
+
+  <!-- decorative clouds -->
+  <div class="cloud" style="top:12%; left:8%;  transform:scale(1.1)"></div>
+  <div class="cloud" style="top:22%; right:12%; transform:scale(.8)"></div>
+  <div class="cloud" style="top:40%; left:20%; transform:scale(.6)"></div>
+
+  <!-- =================== TITLE SCREEN =================== -->
+  <section id="title" class="screen active">
+    <div class="logo">
+      <div class="l1">WHACK&nbsp;-&nbsp;THE</div>
+      <div class="l2">★ WORD! ★</div>
+    </div>
+    <div class="subtitle">⚡ Sight-word speed reading ⚡
+      <button class="icon-btn musicbtn" title="Music on/off"
+        style="vertical-align:middle;width:34px;height:34px;font-size:16px;margin-left:6px">🎵</button>
+    </div>
+
+    <!-- the blocky buddy waves on the title -->
+    <div id="titleBuddy"></div>
+
+    <div class="setlabel">📚 Word list</div>
+    <div class="levels" id="wordsets">
+      <button class="lvl sel" data-set="fry">🏁 Fry<small>First 100</small></button>
+      <button class="lvl" data-set="dolch1">📗 Dolch 1<small>1st grade</small></button>
+      <button class="lvl" data-set="dolch2">📘 Dolch 2<small>2nd grade</small></button>
+      <button class="lvl" data-set="softc">🔤 Soft c<small>9 words</small></button>
+      <button class="lvl" data-set="ey">🔑 -ey<small>7 words</small></button>
+    </div>
+
+    <div class="setlabel">🔲 Board size</div>
+    <div class="levels" id="levels">
+      <button class="lvl sel" data-mode="easy">😀 Easy<small>4 words</small></button>
+      <button class="lvl" data-mode="medium">😎 Medium<small>6 words</small></button>
+      <button class="lvl" data-mode="hard">🔥 Hard<small>9 words</small></button>
+    </div>
+
+    <div class="setlabel">🗡️ Bonus-game weapon</div>
+    <div class="levels" id="weapons">
+      <button class="lvl sel" data-weapon="arrow">🏹 Arrow<small>straight</small></button>
+      <button class="lvl" data-weapon="gun">🔫 Gun<small>rapid</small></button>
+      <button class="lvl" data-weapon="bomb">💣 Bomb<small>blast</small></button>
+      <button class="lvl" data-weapon="spray">🧴 Spray<small>close-up</small></button>
+    </div>
+
+    <button class="btn" id="startBtn">▶ START</button>
+
+    <div class="howto">
+      <b>How to play:</b> Two signs show the <b>same word</b> — tap them both!
+      The computer reads the word, then <b>you say it out loud</b>.<br>
+      💻 On a laptop: use the <kbd>← ↑ → ↓</kbd> arrows to move, and
+      <kbd>Space</kbd> to pick a word.
+    </div>
+  </section>
+
+  <!-- =================== GAME SCREEN =================== -->
+  <section id="game" class="screen">
+    <div class="hud">
+      <div class="chip">⭐ Score <span class="big" id="score">0</span></div>
+      <div class="chip">🔥 Streak <span class="big" id="streak">0</span></div>
+      <div class="hud-right">
+        <button class="icon-btn musicbtn" title="Music on/off">🎵</button>
+        <button class="icon-btn" id="muteBtn" title="Voice &amp; sound on/off">🔊</button>
+        <button class="icon-btn" id="homeBtn" title="Home">🏠</button>
+      </div>
+    </div>
+
+    <div class="prompt" id="prompt">Find the two words that match!</div>
+
+    <div class="stage">
+      <div class="board" id="board"></div>
+      <div class="buddy" id="buddy"></div>
+    </div>
+  </section>
+
+  <!-- =================== MINI-GAME (coin bonus) =================== -->
+  <section id="mini" class="screen">
+    <div class="mini-hud">
+      <div class="chip">🪙 Coins <span class="big" id="coins">0</span></div>
+      <div class="mini-title">★ BONUS! Coins, blocks &amp; bugs! ★</div>
+      <div class="chip">⏱️ <span class="big" id="miniTime">30</span></div>
+    </div>
+    <div class="mini-stage" id="miniStage">
+      <div class="mini-world" id="miniWorld">
+        <div class="ground" id="miniGround"></div>
+        <!-- blocks, bugs, coins, arrows and the player are injected here -->
+      </div>
+    </div>
+    <!-- on-screen touch controls (also usable with a mouse) -->
+    <div class="controls">
+      <button class="ctrl" id="cLeft">◀</button>
+      <button class="ctrl jump" id="cJump">⬆ JUMP</button>
+      <button class="ctrl shoot" id="cShoot">🏹 SHOOT</button>
+      <button class="ctrl" id="cRight">▶</button>
+    </div>
+  </section>
+
+  <!-- celebration banner -->
+  <div class="banner" id="banner"><div class="pop" id="bannerText">GREAT!</div></div>
+
+<script>
+/* ============================================================
+   FRY FIRST 100 — high-frequency sight words (in order)
+   ============================================================ */
+const FRY100 = [
+  "the","of","and","a","to","in","is","you","that","it",
+  "he","was","for","on","are","as","with","his","they","I",
+  "at","be","this","have","from","or","one","had","by","word",
+  "but","not","what","all","were","we","when","your","can","said",
+  "there","use","an","each","which","she","do","how","their","if",
+  "will","up","other","about","out","many","then","them","these","so",
+  "some","her","would","make","like","him","into","time","has","look",
+  "two","more","write","go","see","number","no","way","could","people",
+  "my","than","first","water","been","call","who","oil","its","now",
+  "find","long","down","day","did","get","come","made","may","part"
+];
+
+/* Dolch Sight Words — First Grade (41 words) */
+const DOLCH1 = [
+  "after","again","an","any","as","ask","by","could","every","fly",
+  "from","give","going","had","has","her","him","his","how","just",
+  "know","let","live","may","of","old","once","open","over","put",
+  "round","some","stop","take","thank","them","then","think","walk","were",
+  "when"
+];
+
+/* Dolch Sight Words — Second Grade (46 words) */
+const DOLCH2 = [
+  "always","around","because","been","before","best","both","buy","call","cold",
+  "does","don't","fast","first","five","found","gave","goes","green","its",
+  "made","many","off","or","pull","read","right","sing","sit","sleep",
+  "tell","their","these","those","upon","us","use","very","wash","which",
+  "why","wish","work","would","write","your"
+];
+
+/* Soft-c words (c sounds like /s/) */
+const SOFTC = ["cancel","surface","silence","decide","acid","city","icy","spicy","fancy"];
+
+/* words ending in -ey */
+const EY = ["Disney","monkey","trolley","key","honey","journey","chimney"];
+
+/* selectable word lists shown on the title screen */
+const WORDSETS = {
+  fry:    { label:"Fry — First 100",   words:FRY100 },
+  dolch1: { label:"Dolch — 1st grade", words:DOLCH1 },
+  dolch2: { label:"Dolch — 2nd grade", words:DOLCH2 },
+  softc:  { label:"Soft c",            words:SOFTC },
+  ey:     { label:"-ey words",         words:EY },
+};
+
+const MODES = {
+  easy:   { holes:4, cols:2 },
+  medium: { holes:6, cols:3 },
+  hard:   { holes:9, cols:3 },
+};
+
+/* ---------- game state ---------- */
+const S = {
+  mode:"easy",
+  wordset:"fry",       // which list: fry / dolch1 / dolch2
+  words:FRY100,        // the active list of words
+  weapon:"arrow",      // mini-game weapon: arrow / gun / bomb / spray
+  score:0,
+  streak:0,
+  matches:0,           // correct matches so far (mini-game reward every 5)
+  board:[],          // array of words, one per hole
+  selected:[],       // hole indices currently selected
+  focus:0,           // keyboard cursor
+  target:"",         // the duplicated word for this round
+  locked:false,      // true while resolving a match / speaking
+  muted:false,
+  bag:[],            // shuffled word queue so we cover the whole list
+};
+
+/* ---------- helpers ---------- */
+const $ = sel => document.querySelector(sel);
+const shuffle = a => { for(let i=a.length-1;i>0;i--){ const j=Math.random()*(i+1)|0; [a[i],a[j]]=[a[j],a[i]]; } return a; };
+
+function nextTargetWord(){
+  if(S.bag.length===0) S.bag = shuffle([...S.words]);  // refill + reshuffle
+  return S.bag.pop();
+}
+
+/* ---------- speech (computer reads the word) ---------- */
+let voice = null;
+function pickVoice(){
+  const vs = speechSynthesis.getVoices();
+  if(!vs.length) return;
+  voice =
+    vs.find(v=>/en-US/i.test(v.lang) && /female|samantha|zira|aria|jenny/i.test(v.name)) ||
+    vs.find(v=>/en-GB/i.test(v.lang)) ||
+    vs.find(v=>/^en/i.test(v.lang)) || vs[0];
+}
+if('speechSynthesis' in window){
+  pickVoice();
+  speechSynthesis.onvoiceschanged = pickVoice;
+}
+function speak(text, {rate=0.85, onend}={}){
+  if(S.muted || !('speechSynthesis' in window)){ if(onend) setTimeout(onend,500); return; }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  if(voice) u.voice = voice;
+  u.rate = rate; u.pitch = 1.05;
+  duckMusic(true);                               // soften music so the word is clear
+  u.onend   = ()=>{ duckMusic(false); if(onend) onend(); };
+  u.onerror = ()=>{ duckMusic(false); if(onend) onend(); };
+  speechSynthesis.speak(u);
+}
+
+/* ============================================================
+   ROBLOX-STYLE BLOCKY CHARACTER (SVG, no images needed)
+   ============================================================ */
+function robloxSVG(withMallet){
+  const mallet = withMallet ? `
+    <g class="mallet">
+      <rect x="118" y="70" width="10" height="80" rx="3" fill="#9a6a35"/>
+      <rect x="150" y="36" width="26" height="14" rx="3" fill="#c0392b" transform="rotate(35 163 43)"/>
+      <rect x="148" y="40" width="48" height="34" rx="6" fill="#e74c3c" transform="rotate(35 170 57)"/>
+      <rect x="148" y="40" width="48" height="10" rx="5" fill="#ff7a6b" transform="rotate(35 170 57)"/>
+    </g>` : '';
+  return `
+  <svg viewBox="0 0 200 230" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">
+    <!-- legs -->
+    <rect x="60" y="168" width="26" height="52" rx="4" fill="#2f6fb0"/>
+    <rect x="100" y="168" width="26" height="52" rx="4" fill="#2f6fb0"/>
+    <!-- torso (roblox green tee) -->
+    <rect x="55" y="108" width="76" height="66" rx="6" fill="#3ac46a"/>
+    <rect x="55" y="108" width="76" height="14" rx="6" fill="#2ea75a"/>
+    <!-- arms -->
+    <rect x="36" y="110" width="22" height="58" rx="6" fill="#f2c200"/>
+    <rect x="128" y="110" width="22" height="58" rx="6" fill="#f2c200"/>
+    <!-- head (classic blocky yellow) -->
+    <rect x="58" y="40" width="70" height="64" rx="8" fill="#f7d000"/>
+    <rect x="58" y="40" width="70" height="64" rx="8" fill="none" stroke="#d9b700" stroke-width="3"/>
+    <!-- face: two eyes + smile -->
+    <rect x="74" y="60" width="11" height="15" rx="3" fill="#222"/>
+    <rect x="101" y="60" width="11" height="15" rx="3" fill="#222"/>
+    <path d="M75 84 q18 16 36 0" stroke="#222" stroke-width="5" fill="none" stroke-linecap="round"/>
+    ${mallet}
+  </svg>`;
+}
+
+/* ============================================================
+   SCREEN ROUTING
+   ============================================================ */
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  $('#'+id).classList.add('active');
+}
+
+/* ---------- title screen wiring ---------- */
+$('#titleBuddy').innerHTML =
+  `<div style="width:clamp(92px,16vw,140px);margin:2px auto">${robloxSVG(true)}</div>`;
+
+$('#levels').addEventListener('click', e=>{
+  const b = e.target.closest('.lvl'); if(!b) return;
+  $('#levels').querySelectorAll('.lvl').forEach(x=>x.classList.remove('sel'));
+  b.classList.add('sel');
+  S.mode = b.dataset.mode;
+});
+
+// choose which word list to play (Fry First 100 / Dolch 1st / Dolch 2nd)
+$('#wordsets').addEventListener('click', e=>{
+  const b = e.target.closest('.lvl'); if(!b) return;
+  $('#wordsets').querySelectorAll('.lvl').forEach(x=>x.classList.remove('sel'));
+  b.classList.add('sel');
+  S.wordset = b.dataset.set;
+  S.words = WORDSETS[S.wordset].words;
+  S.bag = [];                       // start the new list fresh
+});
+
+// choose the mini-game weapon (arrow / gun / bomb / spray)
+$('#weapons').addEventListener('click', e=>{
+  const b = e.target.closest('.lvl'); if(!b) return;
+  $('#weapons').querySelectorAll('.lvl').forEach(x=>x.classList.remove('sel'));
+  b.classList.add('sel');
+  S.weapon = b.dataset.weapon;
+});
+
+$('#startBtn').addEventListener('click', ()=>{
+  // a user gesture is required to unlock speech on some browsers
+  if('speechSynthesis' in window){ speechSynthesis.cancel(); pickVoice(); }
+  S.score=0; S.streak=0; S.matches=0; S.bag=[];
+  updateHUD();
+  show('game');
+  $('#buddy').innerHTML = robloxSVG(true);
+  newRound();
+});
+
+$('#homeBtn').addEventListener('click', ()=>{ speechSynthesis.cancel(); show('title'); });
+$('#muteBtn').addEventListener('click', ()=>{
+  S.muted = !S.muted;
+  $('#muteBtn').textContent = S.muted ? '🔇' : '🔊';
+  if(S.muted) speechSynthesis.cancel();
+});
+
+function updateHUD(){ $('#score').textContent = S.score; $('#streak').textContent = S.streak; }
+
+/* ============================================================
+   ROUND BUILDING
+   ============================================================ */
+function newRound(){
+  S.locked = false;
+  S.selected = [];
+  S.focus = 0;
+  const { holes:wantHoles, cols } = MODES[S.mode];
+
+  // one word appears twice; the rest are unique distractors. Small lists may
+  // not have enough unique words to fill the biggest board, so clamp to what's
+  // available (the board just shows a few fewer tiles).
+  S.target = nextTargetWord();
+  const distractors = shuffle(S.words.filter(w=>w!==S.target)).slice(0, wantHoles-2);
+  S.board = shuffle([S.target, S.target, ...distractors]);
+  const holes = S.board.length;
+
+  // build the grid
+  const board = $('#board');
+  board.style.gridTemplateColumns = `repeat(${cols}, auto)`;
+  board.innerHTML = '';
+  S.board.forEach((w, i)=>{
+    const hole = document.createElement('div');
+    hole.className = 'hole';
+    hole.dataset.i = i;
+    hole.innerHTML = `
+      <div class="mound"></div>
+      <div class="pit"></div>
+      <div class="sign"><div class="post"></div>
+        <div class="plank"><span class="word">${w}</span></div>
+      </div>`;
+    hole.addEventListener('click', ()=>selectHole(i));
+    board.appendChild(hole);
+  });
+
+  $('#prompt').textContent = "🔍 Find the two words that match!";
+
+  // pop the signs up with a little stagger (whack-a-mole feel)
+  const order = shuffle([...Array(holes).keys()]);
+  order.forEach((i, k)=>{
+    setTimeout(()=>{ board.children[i]?.classList.add('up'); }, 120 + k*90);
+  });
+
+  updateFocus();
+}
+
+function holeEls(){ return [...$('#board').children]; }
+
+/* ---------- keyboard focus cursor ---------- */
+function updateFocus(){
+  holeEls().forEach((h,i)=> h.classList.toggle('focus', i===S.focus));
+}
+
+/* ============================================================
+   SELECTION + MATCH CHECK
+   ============================================================ */
+function selectHole(i){
+  if(S.locked) return;
+  const els = holeEls();
+  const el = els[i];
+  if(!el || !el.classList.contains('up')) return;
+
+  // toggle off if already selected
+  const at = S.selected.indexOf(i);
+  if(at>=0){ S.selected.splice(at,1); el.classList.remove('sel'); return; }
+
+  if(S.selected.length>=2) return;      // only two at a time
+  S.selected.push(i);
+  el.classList.add('sel');
+
+  if(S.selected.length===2) checkMatch();
+}
+
+function checkMatch(){
+  const [a,b] = S.selected;
+  const els = holeEls();
+  const same = S.board[a]===S.board[b];
+
+  if(same){
+    S.locked = true;
+    const word = S.board[a];
+    els[a].classList.add('good'); els[b].classList.add('good');
+
+    // character whacks + cheers
+    const buddy = $('#buddy');
+    buddy.classList.add('swing','cheer');
+    setTimeout(()=>buddy.classList.remove('swing','cheer'), 700);
+
+    confetti();
+    S.score += 10; S.streak += 1; S.matches += 1;
+    if(S.streak>0 && S.streak%5===0) S.score += 20;   // streak bonus
+    updateHUD();
+    showBanner(pickPraise());
+
+    // computer reads the word, then child repeats
+    $('#prompt').innerHTML = `🔊 <b>"${word}"</b>`;
+    speak(word, { onend: ()=>repeatPhase(word) });
+    // safety: if speech never fires onend, still advance
+    setTimeout(()=>{ if(S.locked && $('#prompt').dataset.phase!=='repeat') repeatPhase(word); }, 2600);
+
+  }else{
+    // wrong pair — shake, then clear
+    els[a].classList.add('bad'); els[b].classList.add('bad');
+    S.streak = 0; updateHUD();
+    $('#prompt').textContent = "❌ Not the same — try again!";
+    setTimeout(()=>{
+      els[a].classList.remove('bad','sel'); els[b].classList.remove('bad','sel');
+      S.selected = [];
+      $('#prompt').textContent = "🔍 Find the two words that match!";
+    }, 650);
+  }
+}
+
+let repeatTimer = null;
+function repeatPhase(word){
+  if($('#prompt').dataset.phase==='repeat') return;  // guard against double-fire
+  $('#prompt').dataset.phase = 'repeat';
+  $('#prompt').innerHTML = `🗣️ Now <b>YOU</b> say it: <b>"${word}"</b>`;
+  clearTimeout(repeatTimer);
+  repeatTimer = setTimeout(()=>{
+    $('#prompt').dataset.phase = '';
+    advance();
+  }, 2200);
+}
+
+// after a correct match (and the "say it" pause), either reward with the
+// coin mini-game (every 5 matches) or load the next word round.
+function advance(){
+  if(S.matches>0 && S.matches % 5 === 0) startMini();
+  else newRound();
+}
+
+/* ============================================================
+   CELEBRATION FX
+   ============================================================ */
+const PRAISE = ["GREAT!","NICE!","SUPER!","WHACK!","YES!","AWESOME!","WOW!"];
+function pickPraise(){ return PRAISE[Math.random()*PRAISE.length|0]; }
+function showBanner(text){
+  const b = $('#banner');
+  $('#bannerText').textContent = text;
+  b.classList.add('show');
+  setTimeout(()=>b.classList.remove('show'), 900);
+}
+function confetti(){
+  const colors = ['#ffd23f','#ff7a3d','#3ec96b','#5a87ec','#ff5d9e','#fff'];
+  for(let i=0;i<70;i++){
+    const c = document.createElement('div');
+    c.className='confetti';
+    c.style.left = Math.random()*100+'vw';
+    c.style.background = colors[i%colors.length];
+    c.style.animation = `fall ${0.9+Math.random()*1.1}s linear forwards`;
+    c.style.animationDelay = Math.random()*0.25+'s';
+    document.body.appendChild(c);
+    setTimeout(()=>c.remove(), 2400);
+  }
+}
+
+/* ============================================================
+   KEYBOARD CONTROLS  (arrows move, space picks)
+   ============================================================ */
+window.addEventListener('keydown', e=>{
+  if(!$('#game').classList.contains('active')) return;
+  const { cols } = MODES[S.mode];
+  const n = S.board.length;
+  let f = S.focus;
+
+  switch(e.key){
+    case 'ArrowRight': f = (f+1)%n; break;
+    case 'ArrowLeft':  f = (f-1+n)%n; break;
+    case 'ArrowDown':  f = (f+cols)%n; break;
+    case 'ArrowUp':    f = (f-cols+n)%n; break;
+    case ' ':
+    case 'Spacebar':
+    case 'Enter':
+      e.preventDefault();
+      selectHole(S.focus);
+      return;
+    default: return;
+  }
+  e.preventDefault();
+  S.focus = f;
+  updateFocus();
+});
+
+/* prevent page scroll on space/arrows */
+window.addEventListener('keydown', e=>{
+  if([' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)
+     && ($('#game').classList.contains('active') || $('#mini').classList.contains('active')))
+    e.preventDefault();
+}, {passive:false});
+
+/* ============================================================
+   MINI-GAME: "Coin Run" — a scrolling Mario-style bonus
+   Run along the trail, bonk blocks for coins, dodge or shoot the
+   crawling bugs, and pick off the high blocks with arrows.
+   ============================================================ */
+/* weapons the student can pick — each one fires differently */
+const WEAPONS = {
+  arrow: { icon:'🏹', cls:'arrow',  vx:12, vy:0,    cd:16, gravity:0,    blast:0,  blocks:true, life:150 },
+  gun:   { icon:'🔫', cls:'bullet', vx:19, vy:0,    cd:8,  gravity:0,    blast:0,  blocks:true, life:130 },
+  bomb:  { icon:'💣', cls:'bomb',   vx:8,  vy:-9,   cd:36, gravity:0.55, blast:95, blocks:true, life:150 },
+  spray: { icon:'🧴', cls:'spray',  vx:0,  vy:0,    cd:12, gravity:0,    blast:0,  spray:true,  range:140 },
+};
+
+/* creatures on the trail — unlocked as the score climbs */
+const BUGTYPES = {
+  ant:       { emoji:'🐜', w:34, h:30, speed:1.9, reward:1, penalty:1 },
+  cockroach: { emoji:'🪳', w:44, h:38, speed:2.3, reward:2, penalty:2 },
+  rat:       { emoji:'🐀', w:58, h:46, speed:1.5, reward:3, penalty:3 },
+};
+
+const MINI = {
+  on:false, raf:0, startT:0, duration:30000,
+  coins:0,
+  // physics (pixels / frame @ ~60fps)
+  GRAV:0.9, JUMP:17, MOVE:5.4,
+  ARROW_VX:12, ARROW_VY:0, ARROW_LIFE:150, SHOOT_CD:16,   // flies straight
+  BUG_W:46, BUG_H:42, BUG_SPEED:1.4, BUG_PENALTY:2, IFRAMES:78,
+  MAX_HITS:5,           // upper bound — each block randomly holds 1..MAX_HITS coins
+  W:0, H:0, worldW:0, cam:0, groundTop:0,
+  PW:64, PH:104, BS:56,
+  world:null, player:null,
+  px:0, py:0, vx:0, vy:0, onGround:true, facing:1, invuln:0, shootCd:0,
+  lastFireTap:0, powerShot:false,   // double-tapping fire = a longer-range shot
+  blocks:[], bugs:[], shots:[],
+  keys:{ left:false, right:false, jump:false, shoot:false },
+};
+
+function startMini(){
+  show('mini');
+  const stage = $('#miniStage');
+  // measure the play area robustly (fall back if a layout read returns 0)
+  const r = stage.getBoundingClientRect();
+  MINI.W = Math.round(window.__miniW || r.width || stage.clientWidth ||
+                      window.innerWidth || document.documentElement.clientWidth || 960);
+  MINI.H = Math.round(window.__miniH || r.height || stage.clientHeight ||
+                      (window.innerHeight ? window.innerHeight - 150 : 0) ||
+                      (document.documentElement.clientHeight - 150) || 520);
+  MINI.worldW = Math.max(Math.round(MINI.W * 2.8), 1900);  // the trail is wider than the screen
+  MINI.groundTop = MINI.H - 64;
+  MINI.cam = 0;
+  MINI.coins = 0; $('#coins').textContent = 0;
+  $('#miniTime').textContent = Math.round(MINI.duration/1000);
+
+  const world = $('#miniWorld');
+  MINI.world = world;
+  world.style.width = MINI.worldW + 'px';
+  world.style.transform = 'translateX(0px)';
+  // clear everything from a previous run (keep the ground strip)
+  [...world.querySelectorAll('.qblock,.player,.mcoin,.bug,.arrow,.bullet,.bomb,.spraycloud,.boom')].forEach(n=>n.remove());
+  $('#miniGround').style.width = MINI.worldW + 'px';
+
+  const standY = MINI.groundTop - MINI.PH;
+  const reach  = (MINI.JUMP*MINI.JUMP)/(2*MINI.GRAV);  // ground-jump height (~160px)
+
+  // --- blocks: every block is within jumping reach ---
+  // h = how high the block BOTTOM sits, in units of jump-reach. Keep h < 1 so the
+  // character can always bonk it from below.
+  MINI.blocks = [];
+  const layout = [
+    {fx:0.08, h:0.82}, {fx:0.16, h:0.55}, {fx:0.24, h:0.90},
+    {fx:0.33, h:0.65}, {fx:0.42, h:0.85}, {fx:0.51, h:0.60},
+    {fx:0.60, h:0.90}, {fx:0.70, h:0.70}, {fx:0.80, h:0.85},
+    {fx:0.90, h:0.60},
+  ];
+  for(const spec of layout){
+    const bottom = standY - reach*spec.h;
+    const by = bottom - MINI.BS;
+    const bx = clampN(MINI.worldW*spec.fx - MINI.BS/2, 8, MINI.worldW-MINI.BS-8);
+    const el = document.createElement('div');
+    el.className = 'qblock' + (spec.high ? ' high' : '');
+    el.textContent = '?';
+    el.style.left = bx + 'px';
+    el.style.top  = by + 'px';
+    world.appendChild(el);
+    // each block randomly holds 1..MAX_HITS coins (so they're not all 5)
+    const maxHits = 1 + (Math.random()*MINI.MAX_HITS | 0);
+    MINI.blocks.push({ x:bx, y:by, bottom:by+MINI.BS, el, cd:0, hits:0, maxHits, high:!!spec.high });
+  }
+
+  // --- bugs: more (and tougher) creatures as the score climbs ---
+  // tier 0 (<100 pts): ants · tier 1 (≥100): + cockroaches · tier 2 (≥150): + rats
+  MINI.bugs = [];
+  const tier = S.score>=150 ? 2 : S.score>=100 ? 1 : 0;
+  const pool = ['ant','cockroach','rat'].slice(0, tier+1);
+  const nBugs = 6 + tier*3;                           // 6 / 9 / 12 creatures
+  for(let k=0; k<nBugs; k++){
+    const fx = 0.18 + 0.76*(nBugs>1 ? k/(nBugs-1) : 0.5);
+    const type = pool[Math.random()*pool.length|0];
+    const t = BUGTYPES[type];
+    const cx = MINI.worldW*fx;
+    const el = document.createElement('div');
+    el.className = 'bug';
+    el.textContent = t.emoji;
+    el.style.fontSize = t.h + 'px';
+    world.appendChild(el);
+    MINI.bugs.push({ type, x:cx, y:MINI.groundTop - t.h, w:t.w, h:t.h, el,
+      vx:(Math.random()<0.5?-1:1)*t.speed, min:cx-120, max:cx+120,
+      reward:t.reward, penalty:t.penalty });
+  }
+
+  MINI.shots = [];
+  $('#cShoot').textContent = WEAPONS[S.weapon].icon + ' FIRE';
+
+  // --- player starts near the left so there's a trail to run down ---
+  const p = document.createElement('div');
+  p.className = 'player';
+  p.innerHTML = robloxSVG(false);
+  world.appendChild(p);
+  MINI.player = p;
+  MINI.px = 70; MINI.py = standY;
+  MINI.vx = MINI.vy = 0; MINI.onGround = true;
+  MINI.facing = 1; MINI.invuln = 0; MINI.shootCd = 0;
+  MINI.powerShot = false; MINI.lastFireTap = 0;
+  drawPlayer();
+
+  MINI.keys = { left:false, right:false, jump:false, shoot:false };
+  MINI.on = true;
+  MINI.startT = performance.now();
+  MINI.raf = requestAnimationFrame(miniLoop);
+}
+
+const clampN = (v,lo,hi)=> Math.max(lo, Math.min(hi, v));
+
+function drawPlayer(){
+  MINI.player.style.left = MINI.px + 'px';
+  MINI.player.style.top  = MINI.py + 'px';
+  MINI.player.style.transform = 'scaleX(' + MINI.facing + ')';
+}
+
+function miniLoop(now){
+  if(!MINI.on) return;
+  const left = now - MINI.startT;
+  $('#miniTime').textContent = Math.max(0, Math.ceil((MINI.duration - left)/1000));
+  if(left >= MINI.duration){ endMini(); return; }
+
+  // ---- horizontal movement + facing ----
+  MINI.vx = (MINI.keys.right?1:0)*MINI.MOVE - (MINI.keys.left?1:0)*MINI.MOVE;
+  if(MINI.vx>0) MINI.facing=1; else if(MINI.vx<0) MINI.facing=-1;
+  MINI.px = clampN(MINI.px + MINI.vx, 0, MINI.worldW - MINI.PW);
+
+  // ---- jump ----
+  if(MINI.keys.jump && MINI.onGround){ MINI.vy = -MINI.JUMP; MINI.onGround = false; }
+
+  // ---- gravity ----
+  const prevTop = MINI.py;
+  MINI.vy += MINI.GRAV;
+  MINI.py += MINI.vy;
+  const standY = MINI.groundTop - MINI.PH;
+  if(MINI.py >= standY){ MINI.py = standY; MINI.vy = 0; MINI.onGround = true; }
+
+  // ---- bonk blocks from below (only reaches non-high blocks) ----
+  for(const b of MINI.blocks){ if(b.cd>0) b.cd--; }
+  if(MINI.vy < 0){
+    const pLeft = MINI.px, pRight = MINI.px + MINI.PW;
+    for(const b of MINI.blocks){
+      const overlapX = pRight > b.x+8 && pLeft < b.x + MINI.BS - 8;
+      const crossed  = prevTop > b.bottom && MINI.py <= b.bottom;
+      if(overlapX && crossed && b.cd===0){
+        MINI.py = b.bottom; MINI.vy = 2; b.cd = 8;
+        bonk(b);
+        break;
+      }
+    }
+  }
+
+  // ---- shooting ----
+  if(MINI.shootCd>0) MINI.shootCd--;
+  if(MINI.keys.shoot && MINI.shootCd<=0) shoot();
+  stepShots();
+
+  // ---- bugs ----
+  stepBugs();
+
+  // ---- invulnerability flash after a bug hit ----
+  if(MINI.invuln>0){ MINI.invuln--; if(MINI.invuln===0) MINI.player.classList.remove('hit'); }
+
+  // ---- camera follows the player ----
+  MINI.cam = clampN(MINI.px + MINI.PW/2 - MINI.W/2, 0, Math.max(0, MINI.worldW - MINI.W));
+  MINI.world.style.transform = 'translateX(' + (-MINI.cam) + 'px)';
+
+  drawPlayer();
+  MINI.raf = requestAnimationFrame(miniLoop);
+}
+
+function stepBugs(){
+  const pLeft=MINI.px, pRight=MINI.px+MINI.PW, pBottom=MINI.py+MINI.PH;
+  for(const bug of MINI.bugs){
+    bug.x += bug.vx;
+    if(bug.x < bug.min){ bug.x = bug.min; bug.vx =  Math.abs(bug.vx); }
+    if(bug.x > bug.max){ bug.x = bug.max; bug.vx = -Math.abs(bug.vx); }
+    bug.el.style.left = bug.x + 'px';
+    bug.el.style.top  = bug.y + 'px';
+    bug.el.style.transform = 'scaleX(' + (bug.vx<0?-1:1) + ')';
+    // touch = lose coins (unless we're above it — i.e. jumping over)
+    if(MINI.invuln<=0){
+      const overlapX = pRight > bug.x+4 && pLeft < bug.x + bug.w - 4;
+      const touching = pBottom > bug.y + 10;          // feet are down at bug level
+      if(overlapX && touching){ hitByBug(bug.penalty); }
+    }
+  }
+}
+
+function hitByBug(penalty){
+  MINI.coins = Math.max(0, MINI.coins - (penalty||1));
+  $('#coins').textContent = MINI.coins;
+  MINI.invuln = MINI.IFRAMES;
+  MINI.player.classList.add('hit');
+  if(!S.muted) buzz();
+}
+
+function shoot(){
+  const w = WEAPONS[S.weapon];
+  MINI.shootCd = w.cd;
+  const dir = MINI.facing;
+  const power = MINI.powerShot; MINI.powerShot = false;     // double-tap = long range
+  if(w.spray){ sprayAttack(dir, w, power); return; }
+  const x = dir>0 ? MINI.px + MINI.PW - 8 : MINI.px - 24;
+  const y = MINI.py + 70;                              // body height — lines up with the bugs
+  const el = document.createElement('div');
+  el.className = w.cls + (power ? ' powershot' : '');
+  if(w.cls==='bomb') el.textContent = '💣';
+  MINI.world.appendChild(el);
+  const s = { x, y, vx:dir*w.vx*(power?1.7:1), vy:w.vy, life:w.life*(power?1.9:1), el, w };
+  drawShot(s);
+  MINI.shots.push(s);
+  if(!S.muted) (w.cls==='bomb' ? thunk() : twang());
+}
+
+function drawShot(s){
+  s.el.style.left = s.x + 'px';
+  s.el.style.top  = s.y + 'px';
+  if(s.w.cls==='arrow' || s.w.cls==='bullet')         // point along travel; the bomb spins via CSS
+    s.el.style.transform = 'rotate(' + (Math.atan2(s.vy, s.vx)*180/Math.PI) + 'deg)';
+}
+
+// remove a bug and reward coins (tougher creatures are worth more)
+function killBug(j){
+  const b = MINI.bugs[j];
+  poof(b.x + b.w/2, b.y);
+  gainCoins(b.reward, b.x + b.w/2, b.y - 6);
+  b.el.remove();
+  MINI.bugs.splice(j, 1);
+}
+
+// bomb blast — clears every creature within the radius
+function explode(x, y, r){
+  const boom = document.createElement('div');
+  boom.className = 'boom'; boom.textContent = '💥';
+  boom.style.left = (x - r) + 'px'; boom.style.top = (y - r) + 'px';
+  boom.style.width = boom.style.height = (r*2) + 'px';
+  boom.style.fontSize = (r*1.5) + 'px';
+  MINI.world.appendChild(boom);
+  setTimeout(()=>boom.remove(), 380);
+  for(let j=MINI.bugs.length-1; j>=0; j--){
+    const b = MINI.bugs[j], bx=b.x+b.w/2, by=b.y+b.h/2;
+    if((bx-x)*(bx-x)+(by-y)*(by-y) < r*r) killBug(j);
+  }
+  for(const b of MINI.blocks){
+    if(b.cd===0 && b.hits<b.maxHits &&
+       Math.abs(b.x+MINI.BS/2 - x) < r && Math.abs(b.y+MINI.BS/2 - y) < r){ b.cd=8; bonk(b); }
+  }
+  if(!S.muted) boomSound();
+}
+
+// spray — a short-range cloud right in front of the player
+function sprayAttack(dir, w, power){
+  const range = w.range * (power ? 1.8 : 1);
+  const rx = dir>0 ? MINI.px + MINI.PW : MINI.px - range;
+  const ry = MINI.py + 26, rh = 86;
+  const el = document.createElement('div');
+  el.className = 'spraycloud';
+  el.style.left = rx + 'px'; el.style.top = ry + 'px';
+  el.style.width = range + 'px'; el.style.height = rh + 'px';
+  el.style.transform = dir<0 ? 'scaleX(-1)' : 'none';
+  MINI.world.appendChild(el);
+  setTimeout(()=>el.remove(), 240);
+  for(let j=MINI.bugs.length-1; j>=0; j--){
+    const b = MINI.bugs[j];
+    if(b.x + b.w > rx && b.x < rx + range && b.y + b.h > ry && b.y < ry + rh) killBug(j);
+  }
+  if(!S.muted) hiss();
+}
+
+function stepShots(){
+  for(let i=MINI.shots.length-1; i>=0; i--){
+    const s = MINI.shots[i];
+    s.x += s.vx; s.y += s.vy;
+    if(s.w.gravity) s.vy += s.w.gravity;
+    s.life--;
+    let dead = s.life<=0 || s.x < -60 || s.x > MINI.worldW+60 || s.y < -80;
+
+    if(s.w.blast){                                     // BOMB — explode on ground/contact
+      let hit = (s.y + 18) >= MINI.groundTop;
+      if(!hit){
+        for(const b of MINI.bugs){
+          if(s.x+14 > b.x && s.x < b.x+b.w && s.y+14 > b.y && s.y < b.y+b.h){ hit=true; break; }
+        }
+      }
+      if(hit || dead){ explode(s.x, s.y, s.w.blast); dead = true; }
+    } else {                                           // ARROW / GUN — single hit
+      if(!dead){
+        for(let j=MINI.bugs.length-1; j>=0; j--){
+          const b = MINI.bugs[j];
+          if(s.x+18 > b.x && s.x < b.x+b.w && s.y+8 > b.y && s.y < b.y+b.h){ killBug(j); dead=true; break; }
+        }
+      }
+      if(!dead && s.w.blocks){                          // arrows/bullets also pop blocks
+        for(const b of MINI.blocks){
+          if(b.cd===0 && b.hits < b.maxHits &&
+             s.x+18 > b.x && s.x < b.x+MINI.BS && s.y+8 > b.y && s.y < b.bottom){
+            b.cd = 8; bonk(b); dead = true; break;
+          }
+        }
+      }
+    }
+    if(dead){ s.el.remove(); MINI.shots.splice(i,1); }
+    else drawShot(s);
+  }
+}
+
+function bonk(b){
+  if(b.hits >= b.maxHits) return;                     // spent — no more coins
+  b.el.classList.remove('bump'); void b.el.offsetWidth; b.el.classList.add('bump');
+  b.hits++;
+  gainCoins(1, b.x + MINI.BS/2, b.y - 8);
+  if(!S.muted) blip();
+  if(b.hits >= b.maxHits){                             // used up — show it's empty
+    b.el.classList.add('used');
+    b.el.textContent = '';
+  }
+}
+
+function gainCoins(n, wx, wy){
+  MINI.coins += n;
+  $('#coins').textContent = MINI.coins;
+  const coin = document.createElement('div');
+  coin.className = 'mcoin';
+  coin.textContent = n>1 ? n : '★';
+  coin.style.left = (wx - 15) + 'px';
+  coin.style.top  = wy + 'px';
+  MINI.world.appendChild(coin);
+  requestAnimationFrame(()=>coin.classList.add('fly'));
+  setTimeout(()=>coin.remove(), 700);
+}
+
+function poof(wx, wy){
+  const p = document.createElement('div');
+  p.className = 'mcoin'; p.textContent = '💥';
+  p.style.left = (wx-15)+'px'; p.style.top = wy+'px';
+  MINI.world.appendChild(p);
+  requestAnimationFrame(()=>p.classList.add('fly'));
+  setTimeout(()=>p.remove(), 700);
+}
+
+// little Web Audio blips (no sound files needed)
+let actx = null;
+function tone(f1, f2, type, dur, vol){
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type=type; o.frequency.setValueAtTime(f1, actx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(f2, actx.currentTime+dur*0.6);
+    g.gain.setValueAtTime(vol, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime+dur);
+    o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime+dur+0.02);
+  }catch(e){}
+}
+const blip  = ()=> tone(880, 1320, 'square', 0.18, 0.12);
+const twang = ()=> tone(420, 180,  'sawtooth', 0.12, 0.08);
+const buzz  = ()=> tone(180, 90,   'square', 0.22, 0.12);
+const thunk = ()=> tone(300, 130,  'triangle', 0.14, 0.10);   // bomb toss
+const boomSound = ()=> tone(170, 45, 'sawtooth', 0.42, 0.16); // explosion
+const hiss  = ()=> tone(1500, 2600,'sawtooth', 0.16, 0.05);   // spray
+
+function endMini(){
+  MINI.on = false;
+  cancelAnimationFrame(MINI.raf);
+  S.score += MINI.coins * 5;                           // coins → bonus points
+  showBanner('🪙 +' + MINI.coins);
+  if(!S.muted) speak(MINI.coins>0 ? `You got ${MINI.coins} coins!` : 'Bonus over', {rate:0.95});
+  setTimeout(()=>{ show('game'); updateHUD(); newRound(); }, 1200);
+}
+
+/* ---------- mini-game input (keyboard + on-screen buttons) ---------- */
+window.addEventListener('keydown', e=>{
+  if(!MINI.on) return;
+  const k = e.key.toLowerCase();
+  if(k==='arrowleft'||k==='a'){ MINI.keys.left=true; }
+  else if(k==='arrowright'||k==='d'){ MINI.keys.right=true; }
+  else if(e.key===' '||k==='arrowup'||k==='w'){ MINI.keys.jump=true; }
+  else if(k==='p'){ MINI.keys.shoot=true; if(!e.repeat) registerFireTap(); }
+});
+window.addEventListener('keyup', e=>{
+  const k = e.key.toLowerCase();
+  if(k==='arrowleft'||k==='a'){ MINI.keys.left=false; }
+  else if(k==='arrowright'||k==='d'){ MINI.keys.right=false; }
+  else if(e.key===' '||k==='arrowup'||k==='w'){ MINI.keys.jump=false; }
+  else if(k==='p'){ MINI.keys.shoot=false; }
+});
+window.addEventListener('keydown', e=>{
+  if(MINI.on && e.key.toLowerCase()==='p') e.preventDefault();
+}, {passive:false});
+// touch / mouse hold buttons
+function holdBtn(id, key){
+  const el = $('#'+id);
+  const on  = e=>{ e.preventDefault(); MINI.keys[key]=true; };
+  const off = e=>{ e.preventDefault(); MINI.keys[key]=false; };
+  el.addEventListener('pointerdown', on);
+  el.addEventListener('pointerup', off);
+  el.addEventListener('pointerleave', off);
+  el.addEventListener('pointercancel', off);
+}
+holdBtn('cLeft','left'); holdBtn('cRight','right'); holdBtn('cJump','jump'); holdBtn('cShoot','shoot');
+
+// a quick double-tap of fire (P key or the FIRE button) sends a longer-range shot
+function registerFireTap(){
+  if(!MINI.on) return;
+  const now = performance.now();
+  if(now - MINI.lastFireTap < 350){ MINI.powerShot = true; MINI.shootCd = 0; }
+  MINI.lastFireTap = now;
+}
+$('#cShoot').addEventListener('pointerdown', registerFireTap);
+
+/* ============================================================
+   BACKGROUND MUSIC — a gentle, upbeat chiptune loop, generated
+   live with the Web Audio API (no files, works offline).
+   ============================================================ */
+function audioCtx(){
+  actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+  return actx;
+}
+const MUSIC = {
+  enabled:true, playing:false, timer:null, step:0, nextTime:0,
+  tempo:128, vol:0.06, master:null,
+};
+const M_NOTE = { 'C5':523.25,'D5':587.33,'E5':659.25,'G5':783.99,'A5':880.0,'C6':1046.5 };
+// 4 bars × 8 eighth-notes (pentatonic over a happy I–V–vi–IV); '-' = rest
+const M_MELODY = [
+  'C5','E5','G5','E5','A5','G5','E5','-',
+  'D5','G5','A5','G5','D5','-','D5','-',
+  'C6','A5','G5','A5','E5','G5','E5','-',
+  'D5','E5','G5','A5','G5','E5','D5','-',
+];
+const M_BASS = [65.41, 98.00, 110.00, 87.31];   // C2 G2 A2 F2, one per bar
+
+function m_voice(freq, time, dur, type, vol){
+  const ctx = audioCtx();
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, time);
+  g.gain.linearRampToValueAtTime(vol, time+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0008, time+dur);
+  o.connect(g).connect(MUSIC.master);
+  o.start(time); o.stop(time+dur+0.03);
+}
+function m_tick(){
+  if(!MUSIC.playing) return;
+  const ctx = audioCtx();
+  const eighth = 60/MUSIC.tempo/2;
+  while(MUSIC.nextTime < ctx.currentTime + 0.13){
+    const i = MUSIC.step % M_MELODY.length;
+    const n = M_MELODY[i];
+    if(n!=='-') m_voice(M_NOTE[n], MUSIC.nextTime, eighth*0.92, 'triangle', 0.5);
+    if(i % 2 === 0){                              // bass + soft click on each beat
+      m_voice(M_BASS[(i/8|0)%4], MUSIC.nextTime, eighth*1.7, 'square', 0.32);
+    }
+    MUSIC.nextTime += eighth; MUSIC.step++;
+  }
+  MUSIC.timer = setTimeout(m_tick, 45);
+}
+function startMusic(){
+  if(MUSIC.playing || !MUSIC.enabled) return;
+  const ctx = audioCtx();
+  if(ctx.state === 'suspended') ctx.resume();
+  if(!MUSIC.master){
+    MUSIC.master = ctx.createGain();
+    MUSIC.master.gain.value = MUSIC.vol;
+    MUSIC.master.connect(ctx.destination);
+  }
+  MUSIC.playing = true;
+  MUSIC.nextTime = ctx.currentTime + 0.1;
+  m_tick();
+}
+function stopMusic(){ MUSIC.playing = false; clearTimeout(MUSIC.timer); }
+function toggleMusic(){
+  MUSIC.enabled = !MUSIC.enabled;
+  if(MUSIC.enabled) startMusic(); else stopMusic();
+  updateMusicBtn();
+}
+function updateMusicBtn(){
+  document.querySelectorAll('.musicbtn').forEach(b=> b.textContent = MUSIC.enabled ? '🎵' : '🔕');
+}
+// duck the music down while the computer speaks, so the word stays clear
+function duckMusic(on){
+  if(!MUSIC.master) return;
+  const ctx = audioCtx();
+  MUSIC.master.gain.cancelScheduledValues(ctx.currentTime);
+  MUSIC.master.gain.linearRampToValueAtTime(on ? MUSIC.vol*0.28 : MUSIC.vol, ctx.currentTime+0.15);
+}
+
+document.querySelectorAll('.musicbtn').forEach(b=> b.addEventListener('click', toggleMusic));
+updateMusicBtn();
+// music needs a user gesture to begin — kick it off on the first interaction
+['pointerdown','keydown'].forEach(ev=>
+  window.addEventListener(ev, ()=>{ if(MUSIC.enabled) startMusic(); }, {passive:true}));
+</script>
+</body>
+</html>
