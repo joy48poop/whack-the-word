@@ -237,6 +237,22 @@
   .bug{ position:absolute; line-height:1; text-align:center; will-change:left;
     filter:drop-shadow(0 3px 2px rgba(0,0,0,.25)); }
 
+  /* ring of fire — jump through the middle! */
+  .hoop{ position:absolute; border-radius:50%; border:12px solid #ff6a00; background:transparent;
+    box-shadow:0 0 16px #ff8c00, inset 0 0 14px #ffb84d, 0 0 30px rgba(255,90,0,.55);
+    pointer-events:none; animation:hoopflicker .25s infinite alternate; }
+  .hoop::before{ content:'🔥'; position:absolute; top:-24px; left:50%; transform:translateX(-50%);
+    font-size:26px; }
+  @keyframes hoopflicker{
+    from{ border-color:#ff6a00; box-shadow:0 0 12px #ff8c00, inset 0 0 10px #ffb84d; }
+    to{   border-color:#ff9a1a; box-shadow:0 0 24px #ffae00, inset 0 0 20px #ffd27a; } }
+  .hoop.cleared{ animation:none; border-color:#7CFC00; box-shadow:0 0 16px #7CFC00; opacity:.55; }
+  .hoop.cleared::before{ content:'✅'; }
+  .hoop.burned{ animation:none; opacity:.45; }
+
+  .chip.lives{ font-size:18px; letter-spacing:2px; padding:8px 12px; }
+  .hud-left{ display:flex; gap:8px; align-items:center; }
+
   /* weapons the player fires */
   .bullet{ position:absolute; width:18px; height:7px; border-radius:4px;
     background:linear-gradient(#fff3a0,#e0a800); box-shadow:0 0 6px #ffd23f; }
@@ -351,8 +367,11 @@
   <!-- =================== MINI-GAME (coin bonus) =================== -->
   <section id="mini" class="screen">
     <div class="mini-hud">
-      <div class="chip">🪙 Coins <span class="big" id="coins">0</span></div>
-      <div class="mini-title">★ BONUS! Coins, blocks &amp; bugs! ★</div>
+      <div class="hud-left">
+        <div class="chip">🪙 Coins <span class="big" id="coins">0</span></div>
+        <div class="chip lives" id="miniLives">❤️❤️❤️</div>
+      </div>
+      <div class="mini-title">★ BONUS! Jump the fire hoops! ★</div>
       <div class="chip">⏱️ <span class="big" id="miniTime">30</span></div>
     </div>
     <div class="mini-stage" id="miniStage">
@@ -438,6 +457,9 @@ const S = {
   score:0,
   streak:0,
   matches:0,           // correct matches so far (mini-game reward every 5)
+  lives:3,             // fire-hoop lives in the bonus game
+  livesDepleted:false, // true once all 3 are lost — bonus locked until refilled
+  depletedScore:0,     // score when lives ran out (refill after +20)
   board:[],          // array of words, one per hole
   selected:[],       // hole indices currently selected
   focus:0,           // keyboard cursor
@@ -556,6 +578,7 @@ $('#startBtn').addEventListener('click', ()=>{
   // a user gesture is required to unlock speech on some browsers
   if('speechSynthesis' in window){ speechSynthesis.cancel(); pickVoice(); }
   S.score=0; S.streak=0; S.matches=0; S.bag=[];
+  S.lives=3; S.livesDepleted=false; S.depletedScore=0;
   updateHUD();
   show('game');
   $('#buddy').innerHTML = robloxSVG(true);
@@ -663,7 +686,12 @@ function checkMatch(){
     S.score += 10; S.streak += 1; S.matches += 1;
     if(S.streak>0 && S.streak%5===0) S.score += 20;   // streak bonus
     updateHUD();
-    showBanner(pickPraise());
+    // refill all 3 lives once 20 points are earned after running out
+    let refilled = false;
+    if(S.livesDepleted && S.score - S.depletedScore >= 20){
+      S.livesDepleted = false; S.lives = 3; refilled = true;
+    }
+    showBanner(refilled ? '❤️ Lives back!' : pickPraise());
 
     // computer reads the word, then child repeats
     $('#prompt').innerHTML = `🔊 <b>"${word}"</b>`;
@@ -699,8 +727,10 @@ function repeatPhase(word){
 // after a correct match (and the "say it" pause), either reward with the
 // coin mini-game (every 5 matches) or load the next word round.
 function advance(){
-  if(S.matches>0 && S.matches % 5 === 0) startMini();
-  else newRound();
+  if(S.matches>0 && S.matches % 5 === 0){
+    if(S.livesDepleted){ showBanner('❤️ Earn 20 pts!'); newRound(); }  // bonus locked
+    else startMini();
+  } else newRound();
 }
 
 /* ============================================================
@@ -795,7 +825,7 @@ const MINI = {
   world:null, player:null,
   px:0, py:0, vx:0, vy:0, onGround:true, facing:1, invuln:0, shootCd:0,
   lastFireTap:0, powerShot:false,   // double-tapping fire = a longer-range shot
-  blocks:[], bugs:[], shots:[],
+  blocks:[], bugs:[], shots:[], hoops:[],
   keys:{ left:false, right:false, jump:false, shoot:false },
 };
 
@@ -820,7 +850,7 @@ function startMini(){
   world.style.width = MINI.worldW + 'px';
   world.style.transform = 'translateX(0px)';
   // clear everything from a previous run (keep the ground strip)
-  [...world.querySelectorAll('.qblock,.player,.mcoin,.bug,.arrow,.bullet,.bomb,.spraycloud,.boom')].forEach(n=>n.remove());
+  [...world.querySelectorAll('.qblock,.player,.mcoin,.bug,.arrow,.bullet,.bomb,.spraycloud,.boom,.hoop')].forEach(n=>n.remove());
   $('#miniGround').style.width = MINI.worldW + 'px';
 
   const standY = MINI.groundTop - MINI.PH;
@@ -874,6 +904,21 @@ function startMini(){
 
   MINI.shots = [];
   $('#cShoot').textContent = WEAPONS[S.weapon].icon + ' FIRE';
+
+  // --- fire hoops: jump through the middle or get burned (lose a life) ---
+  S.lives = 3; updateLives();
+  MINI.hoops = [];
+  const HD = 132, hcy = MINI.groundTop - 132;          // ring centre needs a jump to reach
+  for(const f of [0.32, 0.54, 0.76]){
+    const hx = MINI.worldW*f;
+    const el = document.createElement('div');
+    el.className = 'hoop';
+    el.style.width = el.style.height = HD + 'px';
+    el.style.left = (hx - HD/2) + 'px';
+    el.style.top  = (hcy - HD/2) + 'px';
+    world.appendChild(el);
+    MINI.hoops.push({ x:hx, openTop:hcy-55, openBottom:hcy+55, el, done:false });
+  }
 
   // --- player starts near the left so there's a trail to run down ---
   const p = document.createElement('div');
@@ -945,7 +990,11 @@ function miniLoop(now){
   // ---- bugs ----
   stepBugs();
 
-  // ---- invulnerability flash after a bug hit ----
+  // ---- fire hoops ----
+  stepHoops();
+  if(!MINI.on) return;                                // a hoop may have ended the round
+
+  // ---- invulnerability flash after a bug/hoop hit ----
   if(MINI.invuln>0){ MINI.invuln--; if(MINI.invuln===0) MINI.player.classList.remove('hit'); }
 
   // ---- camera follows the player ----
@@ -980,6 +1029,44 @@ function hitByBug(penalty){
   MINI.invuln = MINI.IFRAMES;
   MINI.player.classList.add('hit');
   if(!S.muted) buzz();
+}
+
+function updateLives(){
+  const el = $('#miniLives'); if(!el) return;
+  el.textContent = '❤️'.repeat(Math.max(0,S.lives)) + '🤍'.repeat(Math.max(0,3-S.lives));
+}
+
+// crossing a hoop: in the opening = clean jump-through; otherwise you're burned
+function stepHoops(){
+  const cx  = MINI.px + MINI.PW/2;
+  const pcy = MINI.py + MINI.PH/2;                    // player's vertical centre
+  for(const h of MINI.hoops){
+    if(h.done) continue;
+    if(Math.abs(cx - h.x) < 20){
+      h.done = true;
+      if(pcy > h.openTop && pcy < h.openBottom){
+        h.el.classList.add('cleared');
+        gainCoins(1, h.x, h.openTop);                 // reward a clean jump
+      } else {
+        h.el.classList.add('burned');
+        loseLife();
+        if(!MINI.on) return;
+      }
+    }
+  }
+}
+
+function loseLife(){
+  if(MINI.invuln > 0) return;                         // brief grace = one hoop, one life
+  S.lives = Math.max(0, S.lives - 1);
+  updateLives();
+  MINI.invuln = MINI.IFRAMES;
+  MINI.player.classList.add('hit');
+  if(!S.muted) buzz();
+  if(S.lives <= 0){
+    S.livesDepleted = true; S.depletedScore = S.score;
+    endMini(true);                                    // out of lives — round over
+  }
 }
 
 function shoot(){
@@ -1146,13 +1233,19 @@ const thunk = ()=> tone(300, 130,  'triangle', 0.14, 0.10);   // bomb toss
 const boomSound = ()=> tone(170, 45, 'sawtooth', 0.42, 0.16); // explosion
 const hiss  = ()=> tone(1500, 2600,'sawtooth', 0.16, 0.05);   // spray
 
-function endMini(){
+function endMini(outOfLives){
+  if(!MINI.on) return;                                 // guard against double-ending
   MINI.on = false;
   cancelAnimationFrame(MINI.raf);
   S.score += MINI.coins * 5;                           // coins → bonus points
-  showBanner('🪙 +' + MINI.coins);
-  if(!S.muted) speak(MINI.coins>0 ? `You got ${MINI.coins} coins!` : 'Bonus over', {rate:0.95});
-  setTimeout(()=>{ show('game'); updateHUD(); newRound(); }, 1200);
+  if(outOfLives){
+    showBanner('💔 Out of lives!');
+    if(!S.muted) speak('Out of lives! Earn twenty points to refill.', {rate:0.95});
+  } else {
+    showBanner('🪙 +' + MINI.coins);
+    if(!S.muted) speak(MINI.coins>0 ? `You got ${MINI.coins} coins!` : 'Bonus over', {rate:0.95});
+  }
+  setTimeout(()=>{ show('game'); updateHUD(); newRound(); }, 1400);
 }
 
 /* ---------- mini-game input (keyboard + on-screen buttons) ---------- */
