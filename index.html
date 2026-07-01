@@ -815,7 +815,7 @@ const MINI = {
   BUG_W:46, BUG_H:42, BUG_SPEED:1.4, BUG_PENALTY:2, IFRAMES:78,
   MAX_HITS:5,           // upper bound — each block randomly holds 1..MAX_HITS coins
   W:0, H:0, worldW:0, cam:0, groundTop:0,
-  PW:64, PH:104, BS:56,
+  PW:64, PH:74, BS:56,   // PH matches the drawn character height so it sits on surfaces
   world:null, player:null,
   px:0, py:0, vx:0, vy:0, onGround:true, facing:1, invuln:0, shootCd:0,
   lastFireTap:0, powerShot:false,   // double-tapping fire = a longer-range shot
@@ -955,22 +955,44 @@ function miniLoop(now){
   $('#miniTime').textContent = Math.max(0, Math.ceil((MINI.duration - left)/1000));
   if(left >= MINI.duration){ endMini(); return; }
 
-  // ---- horizontal movement + facing ----
-  MINI.vx = (MINI.keys.right?1:0)*MINI.MOVE - (MINI.keys.left?1:0)*MINI.MOVE;
-  if(MINI.vx>0) MINI.facing=1; else if(MINI.vx<0) MINI.facing=-1;
+  // ---- horizontal movement + facing (momentum carries you through the jump) ----
+  if(MINI.onGround){
+    MINI.vx = (MINI.keys.right?1:0)*MINI.MOVE - (MINI.keys.left?1:0)*MINI.MOVE;   // snappy on the ground
+  } else {
+    const steer = (MINI.keys.right?1:0)*0.6 - (MINI.keys.left?1:0)*0.6;           // gentle air steering
+    MINI.vx = clampN(MINI.vx + steer, -MINI.MOVE*1.4, MINI.MOVE*1.4);             // keep momentum airborne
+  }
+  if(MINI.vx > 0.2) MINI.facing=1; else if(MINI.vx < -0.2) MINI.facing=-1;
   MINI.px = clampN(MINI.px + MINI.vx, 0, MINI.worldW - MINI.PW);
 
-  // ---- jump (tap faster to flap higher, clearing spikes & blocks) ----
+  // ---- jump: arcs FORWARD so you clear the spike (tap faster to flap higher) ----
   if(MINI.jumpPressed){
-    if(MINI.onGround){ MINI.vy = -MINI.JUMP; MINI.onGround = false; MINI.airJumps = 0; }
-    else if(MINI.airJumps < MINI.MAX_AIR){ MINI.vy = -MINI.JUMP*0.72; MINI.airJumps++; }
+    if(MINI.onGround){
+      MINI.vy = -MINI.JUMP; MINI.onGround = false; MINI.airJumps = 0;
+      if(Math.abs(MINI.vx) < 1) MINI.vx = MINI.facing * MINI.MOVE * 0.9;          // forward hop from a standstill
+    } else if(MINI.airJumps < MINI.MAX_AIR){
+      MINI.vy = -MINI.JUMP*0.72; MINI.airJumps++;
+    }
     MINI.jumpPressed = false;
   }
 
-  // ---- gravity + landing on the (possibly sloped) ground ----
+  // ---- gravity + landing (ground, slopes, and ON TOP of blocks) ----
   const prevTop = MINI.py;
   MINI.vy += MINI.GRAV;
   MINI.py += MINI.vy;
+  MINI.onGround = false;                              // assume airborne until a landing check passes
+
+  // land on top of a block when dropping onto it (feet cross the block's top edge)
+  if(MINI.vy >= 0){
+    const prevFeet = prevTop + MINI.PH, curFeet = MINI.py + MINI.PH;
+    const pLeft = MINI.px, pRight = MINI.px + MINI.PW;
+    for(const b of MINI.blocks){
+      if(pRight > b.x + 6 && pLeft < b.x + MINI.BS - 6 && prevFeet <= b.y && curFeet >= b.y){
+        MINI.py = b.y - MINI.PH; MINI.vy = 0; MINI.onGround = true; MINI.airJumps = 0; break;
+      }
+    }
+  }
+  // land on the (possibly sloped) ground
   const standY = groundYAt(MINI.px + MINI.PW/2) - MINI.PH;
   if(MINI.py >= standY){ MINI.py = standY; MINI.vy = 0; MINI.onGround = true; MINI.airJumps = 0; }
 
