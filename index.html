@@ -269,15 +269,25 @@
   .arrow::before{ content:""; position:absolute; left:-2px; top:-3px; width:8px; height:14px;
     background:#e9d8b0; clip-path:polygon(100% 0, 0 50%, 100% 100%); }
 
-  .controls{ width:100%; display:flex; gap:10px; padding:10px 14px 16px;
-    justify-content:center; }
-  .ctrl{ flex:1; max-width:150px; font-family:inherit; font-weight:900; color:#fff;
-    border:none; border-radius:16px; padding:18px 10px; font-size:22px; cursor:pointer;
-    background:linear-gradient(#7aa8ff,#5a87ec); box-shadow:0 6px 0 #3f63c0;
-    touch-action:none; }
-  .ctrl.jump{ background:linear-gradient(#ffce4d,#f0a91f); box-shadow:0 6px 0 #c47f0c; flex:1.4; }
+  .controls{ width:100%; display:flex; flex-wrap:wrap; gap:8px; padding:10px 12px 16px;
+    justify-content:center; align-items:stretch; }
+  .ctrl{ flex:1 1 auto; max-width:210px; font-family:inherit; font-weight:900; color:#fff;
+    border:none; border-radius:15px; padding:13px 10px; font-size:clamp(14px,1.9vw,19px);
+    cursor:pointer; white-space:nowrap;
+    display:inline-flex; align-items:center; justify-content:center; gap:5px;
+    background:linear-gradient(#7aa8ff,#5a87ec); box-shadow:0 6px 0 #3f63c0; touch-action:none; }
+  .ctrl.move{ flex:0 0 auto; min-width:58px; font-size:20px; }
+  .ctrl.jumpup{ background:linear-gradient(#69d66b,#39b24a); box-shadow:0 6px 0 #279138; }
+  .ctrl.jumpacross{ background:linear-gradient(#ffab5e,#f0791f); box-shadow:0 6px 0 #c45a0c; }
   .ctrl:active{ transform:translateY(3px); box-shadow:0 3px 0 #3f63c0; }
-  .ctrl.jump:active{ box-shadow:0 3px 0 #c47f0c; }
+  .ctrl.jumpup:active{ box-shadow:0 3px 0 #279138; }
+  .ctrl.jumpacross:active{ box-shadow:0 3px 0 #c45a0c; }
+  /* the highlighted word (UP / ACROSS) shows as a white chip */
+  .hl{ display:inline-block; background:#fff; color:#c2410c; padding:0 6px; border-radius:7px;
+    font-weight:900; }
+  .ctrl.jumpup .hl{ color:#218838; }
+  .jicon{ width:22px; height:22px; flex:0 0 auto; }
+  .jicon.wide{ width:34px; }
 
   .hidden{ display:none !important; }
 </style>
@@ -375,10 +385,20 @@
     </div>
     <!-- on-screen touch controls (also usable with a mouse) -->
     <div class="controls">
-      <button class="ctrl" id="cLeft">◀</button>
-      <button class="ctrl jump" id="cJump">⬆ JUMP</button>
-      <button class="ctrl shoot" id="cShoot">🏹 SHOOT</button>
-      <button class="ctrl" id="cRight">▶</button>
+      <button class="ctrl move" id="cLeft">◀</button>
+      <button class="ctrl jumpup" id="cJumpUp">
+        <svg viewBox="0 0 24 24" class="jicon"><path d="M12 3 L21 14 L15.5 14 L15.5 21 L8.5 21 L8.5 14 L3 14 Z" fill="#fff"/></svg>
+        JUMP&nbsp;<span class="hl">UP</span>
+      </button>
+      <button class="ctrl jumpacross" id="cJumpAcross">
+        JUMP&nbsp;<span class="hl">ACROSS</span>
+        <svg viewBox="0 0 44 24" class="jicon wide">
+          <path d="M4 21 Q22 -4 37 18" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/>
+          <path d="M37 18 L31.5 15 L39.5 11 Z" fill="#fff"/>
+        </svg>
+      </button>
+      <button class="ctrl shoot" id="cShoot">🏹 FIRE</button>
+      <button class="ctrl move" id="cRight">▶</button>
     </div>
   </section>
 
@@ -819,7 +839,7 @@ const MINI = {
   world:null, player:null,
   px:0, py:0, vx:0, vy:0, onGround:true, facing:1, invuln:0, shootCd:0,
   lastFireTap:0, powerShot:false,   // double-tapping fire = a longer-range shot
-  jumpPressed:false, airJumps:0, MAX_AIR:3,   // tap jump faster to flap higher
+  jumpUpPressed:false, jumpAcrossPressed:false, airJumps:0, MAX_AIR:3,  // two jump types; tap faster to flap higher
   blocks:[], bugs:[], shots:[], spikes:[], terrain:[],
   keys:{ left:false, right:false, jump:false, shoot:false },
 };
@@ -932,7 +952,7 @@ function startMini(){
   MINI.vx = MINI.vy = 0; MINI.onGround = true;
   MINI.facing = 1; MINI.invuln = 0; MINI.shootCd = 0;
   MINI.powerShot = false; MINI.lastFireTap = 0;
-  MINI.jumpPressed = false; MINI.airJumps = 0;
+  MINI.jumpUpPressed = false; MINI.jumpAcrossPressed = false; MINI.airJumps = 0;
   drawPlayer();
 
   MINI.keys = { left:false, right:false, jump:false, shoot:false };
@@ -965,15 +985,17 @@ function miniLoop(now){
   if(MINI.vx > 0.2) MINI.facing=1; else if(MINI.vx < -0.2) MINI.facing=-1;
   MINI.px = clampN(MINI.px + MINI.vx, 0, MINI.worldW - MINI.PW);
 
-  // ---- jump: arcs FORWARD so you clear the spike (tap faster to flap higher) ----
-  if(MINI.jumpPressed){
+  // ---- two jump types (tap faster to flap higher on either) ----
+  // JUMP UP = straight up, stays put (collect coins); JUMP ACROSS = forward arc (clear spikes)
+  if(MINI.jumpUpPressed || MINI.jumpAcrossPressed){
+    const across = MINI.jumpAcrossPressed;
     if(MINI.onGround){
       MINI.vy = -MINI.JUMP; MINI.onGround = false; MINI.airJumps = 0;
-      if(Math.abs(MINI.vx) < 1) MINI.vx = MINI.facing * MINI.MOVE * 0.9;          // forward hop from a standstill
+      MINI.vx = across ? MINI.facing * MINI.MOVE * 0.95 : 0;   // arc forward, or straight up
     } else if(MINI.airJumps < MINI.MAX_AIR){
       MINI.vy = -MINI.JUMP*0.72; MINI.airJumps++;
     }
-    MINI.jumpPressed = false;
+    MINI.jumpUpPressed = MINI.jumpAcrossPressed = false;
   }
 
   // ---- gravity + landing (ground, slopes, and ON TOP of blocks) ----
@@ -1324,7 +1346,8 @@ window.addEventListener('keydown', e=>{
   const k = e.key.toLowerCase();
   if(k==='arrowleft'||k==='a'){ MINI.keys.left=true; }
   else if(k==='arrowright'||k==='d'){ MINI.keys.right=true; }
-  else if(e.key===' '||k==='arrowup'||k==='w'){ MINI.keys.jump=true; if(!e.repeat) MINI.jumpPressed=true; }
+  else if(e.key===' '){ if(!e.repeat) MINI.jumpAcrossPressed=true; }     // Space = jump across
+  else if(k==='arrowup'||k==='w'){ if(!e.repeat) MINI.jumpUpPressed=true; }  // Up / W = jump up
   else if(k==='p'){ MINI.keys.shoot=true; if(!e.repeat) registerFireTap(); }
 });
 window.addEventListener('keyup', e=>{
@@ -1347,7 +1370,7 @@ function holdBtn(id, key){
   el.addEventListener('pointerleave', off);
   el.addEventListener('pointercancel', off);
 }
-holdBtn('cLeft','left'); holdBtn('cRight','right'); holdBtn('cJump','jump'); holdBtn('cShoot','shoot');
+holdBtn('cLeft','left'); holdBtn('cRight','right'); holdBtn('cShoot','shoot');
 
 // a quick double-tap of fire (P key or the FIRE button) sends a longer-range shot
 function registerFireTap(){
@@ -1357,8 +1380,9 @@ function registerFireTap(){
   MINI.lastFireTap = now;
 }
 $('#cShoot').addEventListener('pointerdown', registerFireTap);
-// each tap of the JUMP button is a fresh press (so mashing = flap higher)
-$('#cJump').addEventListener('pointerdown', ()=>{ if(MINI.on) MINI.jumpPressed = true; });
+// each tap of a jump button is a fresh press (so mashing = flap higher)
+$('#cJumpUp').addEventListener('pointerdown', e=>{ e.preventDefault(); if(MINI.on) MINI.jumpUpPressed = true; });
+$('#cJumpAcross').addEventListener('pointerdown', e=>{ e.preventDefault(); if(MINI.on) MINI.jumpAcrossPressed = true; });
 
 /* ============================================================
    BACKGROUND MUSIC — a gentle, upbeat chiptune loop, generated
