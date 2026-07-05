@@ -222,7 +222,8 @@
   .mcoin.fly{ animation:coinfly .65s ease-out forwards; }
   @keyframes coinfly{ to{ transform:translateY(-90px) scale(.4); opacity:0; } }
 
-  .player{ position:absolute; width:64px; pointer-events:none; will-change:top,left; }
+  .baoimg{ width:100%; height:auto; display:block; pointer-events:none; -webkit-user-select:none; user-select:none; }
+  .player{ position:absolute; width:70px; pointer-events:none; will-change:top,left; }
   .player.hit{ animation:hitflash .25s steps(2) infinite; }
   @keyframes hitflash{ 0%{ opacity:1; filter:none; } 50%{ opacity:.35; filter:drop-shadow(0 0 6px #ff5d5d);} }
 
@@ -519,36 +520,10 @@ function speak(text, {rate=0.85, onend}={}){
 }
 
 /* ============================================================
-   ROBLOX-STYLE BLOCKY CHARACTER (SVG, no images needed)
+   CHARACTER — the BAO mascot (with hammer), from bao.png
    ============================================================ */
-function robloxSVG(withMallet){
-  const mallet = withMallet ? `
-    <g class="mallet">
-      <rect x="118" y="70" width="10" height="80" rx="3" fill="#9a6a35"/>
-      <rect x="150" y="36" width="26" height="14" rx="3" fill="#c0392b" transform="rotate(35 163 43)"/>
-      <rect x="148" y="40" width="48" height="34" rx="6" fill="#e74c3c" transform="rotate(35 170 57)"/>
-      <rect x="148" y="40" width="48" height="10" rx="5" fill="#ff7a6b" transform="rotate(35 170 57)"/>
-    </g>` : '';
-  return `
-  <svg viewBox="0 0 200 230" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">
-    <!-- legs -->
-    <rect x="60" y="168" width="26" height="52" rx="4" fill="#2f6fb0"/>
-    <rect x="100" y="168" width="26" height="52" rx="4" fill="#2f6fb0"/>
-    <!-- torso (roblox green tee) -->
-    <rect x="55" y="108" width="76" height="66" rx="6" fill="#3ac46a"/>
-    <rect x="55" y="108" width="76" height="14" rx="6" fill="#2ea75a"/>
-    <!-- arms -->
-    <rect x="36" y="110" width="22" height="58" rx="6" fill="#f2c200"/>
-    <rect x="128" y="110" width="22" height="58" rx="6" fill="#f2c200"/>
-    <!-- head (classic blocky yellow) -->
-    <rect x="58" y="40" width="70" height="64" rx="8" fill="#f7d000"/>
-    <rect x="58" y="40" width="70" height="64" rx="8" fill="none" stroke="#d9b700" stroke-width="3"/>
-    <!-- face: two eyes + smile -->
-    <rect x="74" y="60" width="11" height="15" rx="3" fill="#222"/>
-    <rect x="101" y="60" width="11" height="15" rx="3" fill="#222"/>
-    <path d="M75 84 q18 16 36 0" stroke="#222" stroke-width="5" fill="none" stroke-linecap="round"/>
-    ${mallet}
-  </svg>`;
+function robloxSVG(){
+  return '<img src="bao.png" alt="Bao" class="baoimg" draggable="false">';
 }
 
 /* ============================================================
