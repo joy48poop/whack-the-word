@@ -139,7 +139,8 @@
     100%{ transform:translate(-42px,-18px) rotate(8deg); } }
 
   /* a mole hole + pop-up word sign */
-  .hole{ position:relative; width:clamp(96px,22vw,170px); aspect-ratio:1/.92; }
+  .hole{ position:relative; width:clamp(96px,22vw,170px); aspect-ratio:1/.92;
+    cursor:pointer; touch-action:manipulation; }
   /* grassy mound with dark hole */
   .mound{ position:absolute; left:6%; right:6%; bottom:0; height:42%;
     background:radial-gradient(120% 160% at 50% 0%, var(--grass) 0 60%, var(--grass-dark) 100%);
@@ -181,7 +182,8 @@
 
   /* ---------- Roblox character + mallet ---------- */
   .buddy{ position:absolute; bottom:-6px; right:-4px; width:clamp(90px,16vw,150px);
-    pointer-events:none; transform-origin:bottom center; }
+    pointer-events:none; transform-origin:bottom center;
+    will-change:transform; -webkit-backface-visibility:hidden; backface-visibility:hidden; }
   .buddy.cheer{ animation:cheer .6s; }
   @keyframes cheer{ 0%,100%{transform:translateY(0)} 30%{transform:translateY(-22px) rotate(-4deg)}
     60%{transform:translateY(0) rotate(3deg)} }
@@ -245,7 +247,11 @@
   .mcoin.fly{ animation:coinfly .65s ease-out forwards; }
   @keyframes coinfly{ to{ transform:translateY(-90px) scale(.4); opacity:0; } }
 
-  .baoimg{ width:100%; height:auto; display:block; pointer-events:none; -webkit-user-select:none; user-select:none; }
+  .baoimg{ width:100%; height:auto; display:block; pointer-events:none;
+    -webkit-user-select:none; user-select:none;
+    /* keep the image on its own GPU layer so it doesn't flicker on iOS */
+    -webkit-transform:translateZ(0); transform:translateZ(0);
+    -webkit-backface-visibility:hidden; backface-visibility:hidden; }
   .player{ position:absolute; width:70px; pointer-events:none; will-change:top,left; }
   .player.hit{ animation:hitflash .25s steps(2) infinite; }
   @keyframes hitflash{ 0%{ opacity:1; filter:none; } 50%{ opacity:.35; filter:drop-shadow(0 0 6px #ff5d5d);} }
@@ -640,7 +646,8 @@ function newRound(){
       <div class="sign"><div class="post"></div>
         <div class="plank"><span class="word">${w}</span></div>
       </div>`;
-    hole.addEventListener('click', ()=>selectHole(i));
+    // pointerdown (not click) so taps register instantly & reliably on touch screens
+    hole.addEventListener('pointerdown', e=>{ e.preventDefault(); selectHole(i); });
     board.appendChild(hole);
   });
 
@@ -761,7 +768,7 @@ function showBanner(text){
 }
 function confetti(){
   const colors = ['#ffd23f','#ff7a3d','#3ec96b','#5a87ec','#ff5d9e','#fff'];
-  for(let i=0;i<70;i++){
+  for(let i=0;i<44;i++){                              // lighter for smooth iPad repaint
     const c = document.createElement('div');
     c.className='confetti';
     c.style.left = Math.random()*100+'vw';
@@ -1491,13 +1498,21 @@ updateMusicBtn();
   }
   ham.addEventListener('animationend', ()=> ham.classList.remove('whack'));
 
+  let hideTimer = null;
+  const cancelHide = ()=>{ if(hideTimer){ clearTimeout(hideTimer); hideTimer = null; } };
+
   // follow the pointer/finger while it's over the play area
-  stage.addEventListener('pointermove',  e=> moveTo(e.clientX, e.clientY), {passive:true});
+  stage.addEventListener('pointermove',  e=>{ cancelHide(); moveTo(e.clientX, e.clientY); }, {passive:true});
   stage.addEventListener('pointerenter', e=> moveTo(e.clientX, e.clientY), {passive:true});
-  stage.addEventListener('pointerdown',  e=>{ moveTo(e.clientX, e.clientY); strike(); }, {passive:true});
-  // hide it when the mouse leaves the board, or the finger lifts off
-  stage.addEventListener('pointerleave', ()=> ham.classList.remove('show'));
-  stage.addEventListener('pointerup',    e=>{ if(e.pointerType!=='mouse') ham.classList.remove('show'); }, {passive:true});
+  stage.addEventListener('pointerdown',  e=>{ cancelHide(); moveTo(e.clientX, e.clientY); strike(); }, {passive:true});
+  // mouse: hide when the cursor leaves the board
+  stage.addEventListener('pointerleave', e=>{ if(e.pointerType==='mouse') ham.classList.remove('show'); });
+  // touch: keep the hammer visible through the whack, then fade — no per-tap flicker
+  stage.addEventListener('pointerup', e=>{
+    if(e.pointerType==='mouse') return;
+    cancelHide();
+    hideTimer = setTimeout(()=> ham.classList.remove('show'), 650);
+  }, {passive:true});
 })();
 </script>
 </body>
