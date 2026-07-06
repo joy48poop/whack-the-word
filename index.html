@@ -112,11 +112,13 @@
     display:flex; align-items:center; justify-content:center; }
 
   .board{ display:grid; gap:clamp(10px,2.5vw,26px); justify-content:center;
-    align-content:center; padding:8px; }
+    align-content:center; padding:8px;
+    /* whacking mallet cursor over the whole play area (hotspot = hammer head) */
+    cursor:url('hammer.png') 42 18, pointer; }
 
   /* a mole hole + pop-up word sign */
   .hole{ position:relative; width:clamp(96px,22vw,170px); aspect-ratio:1/.92;
-    cursor:pointer; }
+    cursor:url('hammer.png') 42 18, pointer; }
   /* grassy mound with dark hole */
   .mound{ position:absolute; left:6%; right:6%; bottom:0; height:42%;
     background:radial-gradient(120% 160% at 50% 0%, var(--grass) 0 60%, var(--grass-dark) 100%);
