@@ -112,13 +112,34 @@
     display:flex; align-items:center; justify-content:center; }
 
   .board{ display:grid; gap:clamp(10px,2.5vw,26px); justify-content:center;
-    align-content:center; padding:8px;
-    /* whacking mallet cursor over the whole play area (hotspot = hammer head) */
-    cursor:url('hammer.png') 42 18, pointer; }
+    align-content:center; padding:8px; }
+
+  /* Over the play area we hide the native mouse cursor and show a floating
+     hammer image instead (#hammerCursor), so it works identically with a
+     mouse on a computer AND a finger on an iPad. */
+  .stage, .stage *{ cursor:none; }
+
+  /* the floating whacking mallet that follows the mouse / finger */
+  #hammerCursor{ position:fixed; left:0; top:0; width:92px; height:120px;
+    z-index:9999; pointer-events:none; opacity:0;
+    /* offset so the hammer HEAD sits on the mouse/finger point */
+    transform:translate(-42px,-18px) rotate(8deg);
+    transform-origin:42px 18px;
+    transition:opacity .12s ease; will-change:transform,opacity;
+    -webkit-user-select:none; user-select:none; }
+  #hammerCursor.show{ opacity:1; }
+  #hammerCursor img{ width:100%; height:100%; display:block;
+    filter:drop-shadow(0 4px 5px rgba(0,0,0,.35)); }
+  /* a quick downward strike when you press/tap */
+  #hammerCursor.whack{ animation:hammerHit .32s ease; }
+  @keyframes hammerHit{
+    0%{ transform:translate(-42px,-18px) rotate(8deg); }
+    35%{ transform:translate(-42px,-18px) rotate(-32deg); }
+    70%{ transform:translate(-42px,-18px) rotate(6deg); }
+    100%{ transform:translate(-42px,-18px) rotate(8deg); } }
 
   /* a mole hole + pop-up word sign */
-  .hole{ position:relative; width:clamp(96px,22vw,170px); aspect-ratio:1/.92;
-    cursor:url('hammer.png') 42 18, pointer; }
+  .hole{ position:relative; width:clamp(96px,22vw,170px); aspect-ratio:1/.92; }
   /* grassy mound with dark hole */
   .mound{ position:absolute; left:6%; right:6%; bottom:0; height:42%;
     background:radial-gradient(120% 160% at 50% 0%, var(--grass) 0 60%, var(--grass-dark) 100%);
@@ -407,6 +428,9 @@
 
   <!-- celebration banner -->
   <div class="banner" id="banner"><div class="pop" id="bannerText">GREAT!</div></div>
+
+  <!-- floating whacking hammer that follows the mouse / finger over the board -->
+  <div id="hammerCursor" aria-hidden="true"><img src="hammer.png" alt="" /></div>
 
 <script>
 /* ============================================================
@@ -1443,6 +1467,38 @@ updateMusicBtn();
 // music needs a user gesture to begin — kick it off on the first interaction
 ['pointerdown','keydown'].forEach(ev=>
   window.addEventListener(ev, ()=>{ if(MUSIC.enabled) startMusic(); }, {passive:true}));
+
+/* ============================================================
+   FLOATING HAMMER — follows the mouse on a computer AND the
+   finger on an iPad (there is no OS cursor on touch screens, so
+   we draw our own hammer that jumps to wherever the finger is).
+   Uses Pointer Events, which cover mouse, pen and touch alike.
+   ============================================================ */
+(function(){
+  const ham   = document.getElementById('hammerCursor');
+  const stage = document.querySelector('.stage');
+  if(!ham || !stage) return;
+
+  function moveTo(x, y){
+    ham.style.left = x + 'px';
+    ham.style.top  = y + 'px';
+    ham.classList.add('show');
+  }
+  function strike(){                 // quick downward whack animation
+    ham.classList.remove('whack');
+    void ham.offsetWidth;            // restart the animation
+    ham.classList.add('whack');
+  }
+  ham.addEventListener('animationend', ()=> ham.classList.remove('whack'));
+
+  // follow the pointer/finger while it's over the play area
+  stage.addEventListener('pointermove',  e=> moveTo(e.clientX, e.clientY), {passive:true});
+  stage.addEventListener('pointerenter', e=> moveTo(e.clientX, e.clientY), {passive:true});
+  stage.addEventListener('pointerdown',  e=>{ moveTo(e.clientX, e.clientY); strike(); }, {passive:true});
+  // hide it when the mouse leaves the board, or the finger lifts off
+  stage.addEventListener('pointerleave', ()=> ham.classList.remove('show'));
+  stage.addEventListener('pointerup',    e=>{ if(e.pointerType!=='mouse') ham.classList.remove('show'); }, {passive:true});
+})();
 </script>
 </body>
 </html>
