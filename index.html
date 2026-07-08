@@ -141,6 +141,7 @@
   /* a mole hole + pop-up word sign */
   .hole{ position:relative; width:clamp(96px,22vw,170px); aspect-ratio:1/.92;
     cursor:pointer; touch-action:manipulation; }
+  .hole *{ touch-action:inherit; }   /* the tapped child (word/plank) inherits it too */
   /* grassy mound with dark hole */
   .mound{ position:absolute; left:6%; right:6%; bottom:0; height:42%;
     background:radial-gradient(120% 160% at 50% 0%, var(--grass) 0 60%, var(--grass-dark) 100%);
@@ -182,8 +183,13 @@
 
   /* ---------- Roblox character + mallet ---------- */
   .buddy{ position:absolute; bottom:-6px; right:-4px; width:clamp(90px,16vw,150px);
-    pointer-events:none; transform-origin:bottom center;
+    pointer-events:auto; cursor:none; transform-origin:bottom center;
     will-change:transform; -webkit-backface-visibility:hidden; backface-visibility:hidden; }
+  /* whack Bao with the hammer → he squashes flatter each hit (--by shrinks,
+     --bx widens). Springy transition gives a satisfying "splat" bounce. */
+  .buddy .baoimg{ transform-origin:bottom center;
+    transform:scaleX(var(--bx,1)) scaleY(var(--by,1)) translateZ(0);
+    transition:transform .22s cubic-bezier(.34,1.8,.5,1); }
   .buddy.cheer{ animation:cheer .6s; }
   @keyframes cheer{ 0%,100%{transform:translateY(0)} 30%{transform:translateY(-22px) rotate(-4deg)}
     60%{transform:translateY(0) rotate(3deg)} }
@@ -603,6 +609,7 @@ $('#startBtn').addEventListener('click', ()=>{
   updateHUD();
   show('game');
   $('#buddy').innerHTML = robloxSVG(true);
+  if(window.resetBaoSquash) window.resetBaoSquash();   // un-squash Bao each round
   newRound();
 });
 
@@ -646,8 +653,11 @@ function newRound(){
       <div class="sign"><div class="post"></div>
         <div class="plank"><span class="word">${w}</span></div>
       </div>`;
-    // pointerdown (not click) so taps register instantly & reliably on touch screens
-    hole.addEventListener('pointerdown', e=>{ e.preventDefault(); selectHole(i); });
+    // Listen for BOTH pointerup and click (whichever a device delivers reliably);
+    // tapSelect() de-dupes so one real tap only counts once. No preventDefault —
+    // it can make iOS treat the tap as a cancelled gesture.
+    hole.addEventListener('pointerup', ()=> tapSelect(i));
+    hole.addEventListener('click',     ()=> tapSelect(i));
     board.appendChild(hole);
   });
 
@@ -672,6 +682,17 @@ function updateFocus(){
 /* ============================================================
    SELECTION + MATCH CHECK
    ============================================================ */
+// A single tap can deliver more than one event (pointerup + click, plus iOS
+// "ghost" events). Collapse anything on the same tile within 400ms into ONE
+// selection so a tap can't accidentally toggle itself back off.
+let _tapI = -1, _tapT = 0;
+function tapSelect(i){
+  const t = performance.now();
+  if(i === _tapI && t - _tapT < 400) return;
+  _tapI = i; _tapT = t;
+  selectHole(i);
+}
+
 function selectHole(i){
   if(S.locked) return;
   const els = holeEls();
@@ -1513,6 +1534,39 @@ updateMusicBtn();
     cancelHide();
     hideTimer = setTimeout(()=> ham.classList.remove('show'), 650);
   }, {passive:true});
+})();
+
+/* ============================================================
+   SMASH BAO — every hammer whack on the Bao mascot flattens him
+   a little more (a fun stress-toy). He splats flatter each hit,
+   then springs back to full height once fully squashed, and also
+   resets fresh at the start of every round.
+   ============================================================ */
+(function(){
+  const buddy = document.getElementById('buddy');
+  if(!buddy) return;
+  const MAX = 6;              // hits until he pops back up
+  let hits = 0;
+
+  function setSquash(){
+    const t  = hits / MAX;               // 0 → 1
+    const by = 1 - 0.62 * t;             // squash down to ~0.38 height
+    const bx = 1 + 0.40 * t;             // and bulge out to ~1.4 width
+    buddy.style.setProperty('--by', by);
+    buddy.style.setProperty('--bx', bx);
+  }
+  function resetBao(){ hits = 0; setSquash(); }
+
+  buddy.addEventListener('pointerdown', ()=>{
+    hits = Math.min(MAX, hits + 1);
+    setSquash();
+    if(hits >= MAX){                     // fully flat → boing back up
+      setTimeout(resetBao, 420);
+    }
+  }, {passive:true});
+
+  // fresh, un-squashed Bao at the start of every new round
+  window.resetBaoSquash = resetBao;
 })();
 </script>
 </body>
