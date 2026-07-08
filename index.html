@@ -1353,6 +1353,8 @@ const buzz  = ()=> tone(180, 90,   'square', 0.22, 0.12);
 const thunk = ()=> tone(300, 130,  'triangle', 0.14, 0.10);   // bomb toss
 const boomSound = ()=> tone(170, 45, 'sawtooth', 0.42, 0.16); // explosion
 const hiss  = ()=> tone(1500, 2600,'sawtooth', 0.16, 0.05);   // spray
+// cartoon "squeak/pop" for smashing Bao — pitches up as he gets flatter (0..1)
+const squeak = (t=0)=> tone(560 + 620*t, 240 + 300*t, 'sine', 0.11, 0.12);
 
 function endMini(outOfLives){
   if(!MINI.on) return;                                 // guard against double-ending
@@ -1545,13 +1547,13 @@ updateMusicBtn();
 (function(){
   const buddy = document.getElementById('buddy');
   if(!buddy) return;
-  const MAX = 6;              // hits until he pops back up
+  const MAX = 10;            // hits until he is fully flat and pops back up
   let hits = 0;
 
   function setSquash(){
     const t  = hits / MAX;               // 0 → 1
-    const by = 1 - 0.62 * t;             // squash down to ~0.38 height
-    const bx = 1 + 0.40 * t;             // and bulge out to ~1.4 width
+    const by = 1 - 0.72 * t;             // squash down to ~0.28 height (totally flat)
+    const bx = 1 + 0.45 * t;             // and bulge out to ~1.45 width
     buddy.style.setProperty('--by', by);
     buddy.style.setProperty('--bx', bx);
   }
@@ -1560,8 +1562,9 @@ updateMusicBtn();
   buddy.addEventListener('pointerdown', ()=>{
     hits = Math.min(MAX, hits + 1);
     setSquash();
+    if(typeof S==='undefined' || !S.muted) squeak(hits / MAX);   // squeak per smash, rising
     if(hits >= MAX){                     // fully flat → boing back up
-      setTimeout(resetBao, 420);
+      setTimeout(resetBao, 480);
     }
   }, {passive:true});
 
